@@ -1,0 +1,13 @@
+mkdir -p /proc
+mkdir -p /tmp
+mkdir -p /sys
+mkdir -p /mnt
+mkdir -p /var/lock
+/bin/mount -a
+mknod /dev/console c 5 1
+mknod /dev/null c 1 3
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mdev -s
+/bin/hostname -F /etc/sysconfig/HOSTNAME

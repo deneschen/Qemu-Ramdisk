@@ -1,0 +1,14 @@
+#!/bin/sh
+# Ash profile
+# vim: syntax=sh
+# No core files by default
+#ulimit -S -c 0 > /dev/null 2>&1
+export USER LOGNAME PS1 PATH
+HOSTNAME=`/bin/hostname`
+LOGNAME=$USER
+export USER=root
+export HOME=root
+export PS1="[$USER@$HOSTNAME\W]\#"
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+LD_LIBRARY_PATH=/lib:/usr/lib:$LD_LIBRARY_PATH
+export PATH LD_LIBRARY_PATH
