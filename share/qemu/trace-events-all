@@ -1,4 +1,4 @@
-# Trace events for debugging and performance instrumentation
+# See docs/devel/tracing.txt for syntax documentation.
 #
 # This file is processed by the tracetool script during the build.
 #
@@ -34,9 +34,9 @@ cpu_out(unsigned int addr, char size, unsigned int val) "addr 0x%x(%c) value %u"
 balloon_event(void *opaque, unsigned long addr) "opaque %p addr %lu"
 
 # vl.c
-vm_state_notify(int running, int reason) "running %d reason %d"
+vm_state_notify(int running, int reason, const char *reason_str) "running %d reason %d (%s)"
 load_file(const char *name, const char *path) "name %s location %s"
-runstate_set(int new_state) "new state %d"
+runstate_set(int current_state, const char *current_state_str, int new_state, const char *new_state_str) "current_run_state %d (%s) new_state %d (%s)"
 system_wakeup_request(int reason) "reason=%d"
 qemu_system_shutdown_request(int reason) "reason=%d"
 qemu_system_powerdown_request(void) ""
@@ -123,11 +123,15 @@ qmp_job_dismiss(void *job) "job %p"
 
 ## vCPU
 
+# trace/control-target.c
+
 # Hot-plug a new virtual (guest) CPU
 #
 # Mode: user, softmmu
 # Targets: all
 vcpu guest_cpu_enter(void)
+
+# trace/control.c
 
 # Hot-unplug a virtual (guest) CPU
 #
@@ -135,11 +139,15 @@ vcpu guest_cpu_enter(void)
 # Targets: all
 vcpu guest_cpu_exit(void)
 
+# qom/cpu.c
+
 # Reset the state of a virtual (guest) CPU
 #
 # Mode: user, softmmu
 # Targets: all
 vcpu guest_cpu_reset(void)
+
+# tcg/tcg-op.c
 
 # @vaddr: Access' virtual address.
 # @info : Access' information (see below).
@@ -161,6 +169,9 @@ vcpu guest_cpu_reset(void)
 # Targets: TCG(all)
 vcpu tcg guest_mem_before(TCGv vaddr, uint8_t info) "info=%d", "vaddr=0x%016"PRIx64" info=%d"
 
+# linux-user/syscall.c
+# bsd-user/syscall.c
+
 # @num: System call number.
 # @arg*: System call argument value.
 #
@@ -178,7 +189,7 @@ vcpu guest_user_syscall(uint64_t num, uint64_t arg1, uint64_t arg2, uint64_t arg
 # Mode: user
 # Targets: TCG(all)
 vcpu guest_user_syscall_ret(uint64_t num, uint64_t ret) "num=0x%016"PRIx64" ret=0x%016"PRIx64
-# Trace events for debugging and performance instrumentation
+# See docs/devel/tracing.txt for syntax documentation.
 
 # kvm-all.c
 kvm_ioctl(int type, void *arg) "type 0x%x, arg %p"
@@ -192,9 +203,11 @@ kvm_irqchip_commit_routes(void) ""
 kvm_irqchip_add_msi_route(char *name, int vector, int virq) "dev %s vector %d virq %d"
 kvm_irqchip_update_msi_route(int virq) "Updating MSI route virq=%d"
 kvm_irqchip_release_virq(int virq) "virq %d"
+kvm_set_ioeventfd_mmio(int fd, uint64_t addr, uint32_t val, bool assign, uint32_t size, bool datamatch) "fd: %d @0x%" PRIx64 " val=0x%x assign: %d size: %d match: %d"
+kvm_set_ioeventfd_pio(int fd, uint16_t addr, uint32_t val, bool assign, uint32_t size, bool datamatch) "fd: %d @0x%x val=0x%x assign: %d size: %d match: %d"
 kvm_set_user_memory(uint32_t slot, uint32_t flags, uint64_t guest_phys_addr, uint64_t memory_size, uint64_t userspace_addr, int ret) "Slot#%d flags=0x%x gpa=0x%"PRIx64 " size=0x%"PRIx64 " ua=0x%"PRIx64 " ret=%d"
 
-# Trace events for debugging and performance instrumentation
+# See docs/devel/tracing.txt for syntax documentation.
 
 # TCG related tracing (mostly disabled by default)
 # cpu-exec.c
@@ -206,7 +219,7 @@ disable exec_tb_exit(void *last_tb, unsigned int flags) "tb:%p flags=0x%x"
 translate_block(void *tb, uintptr_t pc, uint8_t *tb_code) "tb:%p, pc:0x%"PRIxPTR", tb_code:%p"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# audio/alsaaudio.c
+# alsaaudio.c
 alsa_revents(int revents) "revents = %d"
 alsa_pollout(int i, int fd) "i = %d fd = %d"
 alsa_set_handler(int events, int index, int fd, int err) "events=0x%x index=%d fd=%d err=%d"
@@ -218,27 +231,45 @@ alsa_resume_out(void) "Resuming suspended output stream"
 alsa_resume_in(void) "Resuming suspended input stream"
 alsa_no_frames(int state) "No frames available and ALSA state is %d"
 
-# audio/ossaudio.c
+# ossaudio.c
 oss_version(int version) "OSS version = 0x%x"
 oss_invalid_available_size(int size, int bufsize) "Invalid available size, size=%d bufsize=%d"
 
-# audio/audio.c
+# audio.c
 audio_timer_start(int interval) "interval %d ms"
 audio_timer_stop(void) ""
 audio_timer_delayed(int interval) "interval %d ms"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# block.c
+# base.c
+qauthz_is_allowed(void *authz, const char *identity, bool allowed) "AuthZ %p check identity=%s allowed=%d"
+
+# simple.c
+qauthz_simple_is_allowed(void *authz, const char *wantidentity, const char *gotidentity) "AuthZ simple %p check want identity=%s got identity=%s"
+
+# list.c
+qauthz_list_check_rule(void *authz, const char *identity, const char *rule, int format, int policy) "AuthZ list %p check rule=%s identity=%s format=%d policy=%d"
+qauthz_list_default_policy(void *authz, const char *identity, int policy) "AuthZ list %p default identity=%s policy=%d"
+
+# listfile.c
+qauthz_list_file_load(void *authz, const char *filename) "AuthZ file %p load filename=%s"
+qauthz_list_file_refresh(void *authz, const char *filename, int success) "AuthZ file %p load filename=%s success=%d"
+
+# pamacct.c
+qauthz_pam_check(void *authz, const char *identity, const char *service) "AuthZ PAM %p identity=%s service=%s"
+# See docs/devel/tracing.txt for syntax documentation.
+
+# ../block.c
 bdrv_open_common(void *bs, const char *filename, int flags, const char *format_name) "bs %p filename \"%s\" flags 0x%x format_name \"%s\""
 bdrv_lock_medium(void *bs, bool locked) "bs %p locked %d"
 
-# block/block-backend.c
+# block-backend.c
 blk_co_preadv(void *blk, void *bs, int64_t offset, unsigned int bytes, int flags) "blk %p bs %p offset %"PRId64" bytes %u flags 0x%x"
 blk_co_pwritev(void *blk, void *bs, int64_t offset, unsigned int bytes, int flags) "blk %p bs %p offset %"PRId64" bytes %u flags 0x%x"
 blk_root_attach(void *child, void *blk, void *bs) "child %p blk %p bs %p"
 blk_root_detach(void *child, void *blk, void *bs) "child %p blk %p bs %p"
 
-# block/io.c
+# io.c
 bdrv_co_preadv(void *bs, int64_t offset, int64_t nbytes, unsigned int flags) "bs %p offset %"PRId64" nbytes %"PRId64" flags 0x%x"
 bdrv_co_pwritev(void *bs, int64_t offset, int64_t nbytes, unsigned int flags) "bs %p offset %"PRId64" nbytes %"PRId64" flags 0x%x"
 bdrv_co_pwrite_zeroes(void *bs, int64_t offset, int count, int flags) "bs %p offset %"PRId64" count %d flags 0x%x"
@@ -246,15 +277,15 @@ bdrv_co_do_copy_on_readv(void *bs, int64_t offset, unsigned int bytes, int64_t c
 bdrv_co_copy_range_from(void *src, uint64_t src_offset, void *dst, uint64_t dst_offset, uint64_t bytes, int read_flags, int write_flags) "src %p offset %"PRIu64" dst %p offset %"PRIu64" bytes %"PRIu64" rw flags 0x%x 0x%x"
 bdrv_co_copy_range_to(void *src, uint64_t src_offset, void *dst, uint64_t dst_offset, uint64_t bytes, int read_flags, int write_flags) "src %p offset %"PRIu64" dst %p offset %"PRIu64" bytes %"PRIu64" rw flags 0x%x 0x%x"
 
-# block/stream.c
+# stream.c
 stream_one_iteration(void *s, int64_t offset, uint64_t bytes, int is_allocated) "s %p offset %" PRId64 " bytes %" PRIu64 " is_allocated %d"
 stream_start(void *bs, void *base, void *s) "bs %p base %p s %p"
 
-# block/commit.c
+# commit.c
 commit_one_iteration(void *s, int64_t offset, uint64_t bytes, int is_allocated) "s %p offset %" PRId64 " bytes %" PRIu64 " is_allocated %d"
 commit_start(void *bs, void *base, void *top, void *s) "bs %p base %p top %p s %p"
 
-# block/mirror.c
+# mirror.c
 mirror_start(void *bs, void *s, void *opaque) "bs %p s %p opaque %p"
 mirror_restart_iter(void *s, int64_t cnt) "s %p dirty count %"PRId64
 mirror_before_flush(void *s) "s %p"
@@ -265,7 +296,7 @@ mirror_iteration_done(void *s, int64_t offset, uint64_t bytes, int ret) "s %p of
 mirror_yield(void *s, int64_t cnt, int buf_free_count, int in_flight) "s %p dirty count %"PRId64" free buffers %d in_flight %d"
 mirror_yield_in_flight(void *s, int64_t offset, int in_flight) "s %p offset %" PRId64 " in_flight %d"
 
-# block/backup.c
+# backup.c
 backup_do_cow_enter(void *job, int64_t start, int64_t offset, uint64_t bytes) "job %p start %" PRId64 " offset %" PRId64 " bytes %" PRIu64
 backup_do_cow_return(void *job, int64_t offset, uint64_t bytes, int ret) "job %p offset %" PRId64 " bytes %" PRIu64 " ret %d"
 backup_do_cow_skip(void *job, int64_t start) "job %p start %"PRId64
@@ -274,7 +305,7 @@ backup_do_cow_read_fail(void *job, int64_t start, int ret) "job %p start %"PRId6
 backup_do_cow_write_fail(void *job, int64_t start, int ret) "job %p start %"PRId64" ret %d"
 backup_do_cow_copy_range_fail(void *job, int64_t start, int ret) "job %p start %"PRId64" ret %d"
 
-# blockdev.c
+# ../blockdev.c
 qmp_block_job_cancel(void *job) "job %p"
 qmp_block_job_pause(void *job) "job %p"
 qmp_block_job_resume(void *job) "job %p"
@@ -283,13 +314,12 @@ qmp_block_job_finalize(void *job) "job %p"
 qmp_block_job_dismiss(void *job) "job %p"
 qmp_block_stream(void *bs, void *job) "bs %p job %p"
 
-# block/file-win32.c
-# block/file-posix.c
-file_paio_submit_co(int64_t offset, int count, int type) "offset %"PRId64" count %d type %d"
+# file-posix.c
+# file-win32.c
 file_paio_submit(void *acb, void *opaque, int64_t offset, int count, int type) "acb %p opaque %p offset %"PRId64" count %d type %d"
 file_copy_file_range(void *bs, int src, int64_t src_off, int dst, int64_t dst_off, int64_t bytes, int flags, int64_t ret) "bs %p src_fd %d offset %"PRIu64" dst_fd %d offset %"PRIu64" bytes %"PRIu64" flags %d ret %"PRId64
 
-# block/qcow2.c
+# qcow2.c
 qcow2_writev_start_req(void *co, int64_t offset, int bytes) "co %p offset 0x%" PRIx64 " bytes %d"
 qcow2_writev_done_req(void *co, int ret) "co %p ret %d"
 qcow2_writev_start_part(void *co) "co %p"
@@ -298,7 +328,7 @@ qcow2_writev_data(void *co, uint64_t offset) "co %p offset 0x%" PRIx64
 qcow2_pwrite_zeroes_start_req(void *co, int64_t offset, int count) "co %p offset 0x%" PRIx64 " count %d"
 qcow2_pwrite_zeroes(void *co, int64_t offset, int count) "co %p offset 0x%" PRIx64 " count %d"
 
-# block/qcow2-cluster.c
+# qcow2-cluster.c
 qcow2_alloc_clusters_offset(void *co, uint64_t offset, int bytes) "co %p offset 0x%" PRIx64 " bytes %d"
 qcow2_handle_copied(void *co, uint64_t guest_offset, uint64_t host_offset, uint64_t bytes) "co %p guest_offset 0x%" PRIx64 " host_offset 0x%" PRIx64 " bytes 0x%" PRIx64
 qcow2_handle_alloc(void *co, uint64_t guest_offset, uint64_t host_offset, uint64_t bytes) "co %p guest_offset 0x%" PRIx64 " host_offset 0x%" PRIx64 " bytes 0x%" PRIx64
@@ -312,7 +342,7 @@ qcow2_l2_allocate_write_l2(void *bs, int l1_index) "bs %p l1_index %d"
 qcow2_l2_allocate_write_l1(void *bs, int l1_index) "bs %p l1_index %d"
 qcow2_l2_allocate_done(void *bs, int l1_index, int ret) "bs %p l1_index %d ret %d"
 
-# block/qcow2-cache.c
+# qcow2-cache.c
 qcow2_cache_get(void *co, int c, uint64_t offset, bool read_from_disk) "co %p is_l2_cache %d offset 0x%" PRIx64 " read_from_disk %d"
 qcow2_cache_get_replace_entry(void *co, int c, int i) "co %p is_l2_cache %d index %d"
 qcow2_cache_get_read(void *co, int c, int i) "co %p is_l2_cache %d index %d"
@@ -320,18 +350,18 @@ qcow2_cache_get_done(void *co, int c, int i) "co %p is_l2_cache %d index %d"
 qcow2_cache_flush(void *co, int c) "co %p is_l2_cache %d"
 qcow2_cache_entry_flush(void *co, int c, int i) "co %p is_l2_cache %d index %d"
 
-# block/qed-l2-cache.c
+# qed-l2-cache.c
 qed_alloc_l2_cache_entry(void *l2_cache, void *entry) "l2_cache %p entry %p"
 qed_unref_l2_cache_entry(void *entry, int ref) "entry %p ref %d"
 qed_find_l2_cache_entry(void *l2_cache, void *entry, uint64_t offset, int ref) "l2_cache %p entry %p offset %"PRIu64" ref %d"
 
-# block/qed-table.c
+# qed-table.c
 qed_read_table(void *s, uint64_t offset, void *table) "s %p offset %"PRIu64" table %p"
 qed_read_table_cb(void *s, void *table, int ret) "s %p table %p ret %d"
 qed_write_table(void *s, uint64_t offset, void *table, unsigned int index, unsigned int n) "s %p offset %"PRIu64" table %p index %u n %u"
 qed_write_table_cb(void *s, void *table, int flush, int ret) "s %p table %p flush %d ret %d"
 
-# block/qed.c
+# qed.c
 qed_need_check_timer_cb(void *s) "s %p"
 qed_start_need_check_timer(void *s) "s %p"
 qed_cancel_need_check_timer(void *s) "s %p"
@@ -344,7 +374,7 @@ qed_aio_write_prefill(void *s, void *acb, uint64_t start, size_t len, uint64_t o
 qed_aio_write_postfill(void *s, void *acb, uint64_t start, size_t len, uint64_t offset) "s %p acb %p start %"PRIu64" len %zu offset %"PRIu64
 qed_aio_write_main(void *s, void *acb, int ret, uint64_t offset, size_t len) "s %p acb %p ret %d offset %"PRIu64" len %zu"
 
-# block/vxhs.c
+# vxhs.c
 vxhs_iio_callback(int error) "ctx is NULL: error %d"
 vxhs_iio_callback_chnfail(int err, int error) "QNIO channel failed, no i/o %d, %d"
 vxhs_iio_callback_unknwn(int opcode, int err) "unexpected opcode %d, errno %d"
@@ -361,7 +391,7 @@ vxhs_parse_uri_hostinfo(char *host, int port) "Host: IP %s, Port %d"
 vxhs_close(char *vdisk_guid) "Closing vdisk %s"
 vxhs_get_creds(const char *cacert, const char *client_key, const char *client_cert) "cacert %s, client_key %s, client_cert %s"
 
-# block/nvme.c
+# nvme.c
 nvme_kick(void *s, int queue) "s %p queue %d"
 nvme_dma_flush_queue_wait(void *s) "s %p"
 nvme_error(int cmd_specific, int sq_head, int sqid, int cid, int status) "cmd_specific %d sq_head %d sqid %d cid %d status 0x%x"
@@ -382,11 +412,67 @@ nvme_cmd_map_qiov(void *s, void *cmd, void *req, void *qiov, int entries) "s %p 
 nvme_cmd_map_qiov_pages(void *s, int i, uint64_t page) "s %p page[%d] 0x%"PRIx64
 nvme_cmd_map_qiov_iov(void *s, int i, void *page, int pages) "s %p iov[%d] %p pages %d"
 
-# block/iscsi.c
+# iscsi.c
 iscsi_xcopy(void *src_lun, uint64_t src_off, void *dst_lun, uint64_t dst_off, uint64_t bytes, int ret) "src_lun %p offset %"PRIu64" dst_lun %p offset %"PRIu64" bytes %"PRIu64" ret %d"
+
+# nbd-client.c
+nbd_parse_blockstatus_compliance(const char *err) "ignoring extra data from non-compliant server: %s"
+nbd_structured_read_compliance(const char *type) "server sent non-compliant unaligned read %s chunk"
+nbd_read_reply_entry_fail(int ret, const char *err) "ret = %d, err: %s"
+nbd_co_request_fail(uint64_t from, uint32_t len, uint64_t handle, uint16_t flags, uint16_t type, const char *name, int ret, const char *err) "Request failed { .from = %" PRIu64", .len = %" PRIu32 ", .handle = %" PRIu64 ", .flags = 0x%" PRIx16 ", .type = %" PRIu16 " (%s) } ret = %d, err: %s"
+
+# ssh.c
+ssh_restart_coroutine(void *co) "co=%p"
+ssh_flush(void) "fsync"
+ssh_check_host_key_knownhosts(const char *key) "host key OK: %s"
+ssh_connect_to_ssh(char *path, int flags, int mode) "opening file %s flags=0x%x creat_mode=0%o"
+ssh_co_yield(int sock, void *rd_handler, void *wr_handler) "s->sock=%d rd_handler=%p wr_handler=%p"
+ssh_co_yield_back(int sock) "s->sock=%d - back"
+ssh_getlength(int64_t length) "length=%" PRIi64
+ssh_co_create_opts(uint64_t size) "total_size=%" PRIu64
+ssh_read(int64_t offset, size_t size) "offset=%" PRIi64 " size=%zu"
+ssh_read_buf(void *buf, size_t size) "sftp_read buf=%p size=%zu"
+ssh_read_return(ssize_t ret) "sftp_read returned %zd"
+ssh_write(int64_t offset, size_t size) "offset=%" PRIi64 " size=%zu"
+ssh_write_buf(void *buf, size_t size) "sftp_write buf=%p size=%zu"
+ssh_write_return(ssize_t ret) "sftp_write returned %zd"
+ssh_seek(int64_t offset) "seeking to offset=%" PRIi64
+
+# curl.c
+curl_timer_cb(long timeout_ms) "timer callback timeout_ms %ld"
+curl_sock_cb(int action, int fd) "sock action %d on fd %d"
+curl_read_cb(size_t realsize) "just reading %zu bytes"
+curl_open(const char *file) "opening %s"
+curl_open_size(uint64_t size) "size = %" PRIu64
+curl_setup_preadv(uint64_t bytes, uint64_t start, const char *range) "reading %" PRIu64 " at %" PRIu64 " (%s)"
+curl_close(void) "close"
+
+# file-posix.c
+file_xfs_write_zeroes(const char *error) "cannot write zero range (%s)"
+file_xfs_discard(const char *error) "cannot punch hole (%s)"
+file_FindEjectableOpticalMedia(const char *media) "Matching using %s"
+file_setup_cdrom(const char *partition) "Using %s as optical disc"
+file_hdev_is_sg(int type, int version) "SG device found: type=%d, version=%d"
+
+# sheepdog.c
+sheepdog_reconnect_to_sdog(void) "Wait for connection to be established"
+sheepdog_aio_read_response(void) "disable cache since the server doesn't support it"
+sheepdog_open(uint32_t vid) "0x%" PRIx32 " snapshot inode was open"
+sheepdog_close(const char *name) "%s"
+sheepdog_create_branch_snapshot(uint32_t vdi) "0x%" PRIx32 " is snapshot"
+sheepdog_create_branch_created(uint32_t vdi) "0x%" PRIx32 " is created"
+sheepdog_create_branch_new(uint32_t vdi) "0x%" PRIx32 " was newly created"
+sheepdog_co_rw_vector_update(uint32_t vdi, uint64_t oid, uint64_t data, long idx) "update ino (%" PRIu32 ") %" PRIu64 " %" PRIu64 " %ld"
+sheepdog_co_rw_vector_new(uint64_t oid) "new oid 0x%" PRIx64
+sheepdog_snapshot_create_info(const char *sn_name, const char *id, const char *name, int64_t size, int is_snapshot) "sn_info: name %s id_str %s s: name %s vm_state_size %" PRId64 " " "is_snapshot %d"
+sheepdog_snapshot_create(const char *sn_name, const char *id) "%s %s"
+sheepdog_snapshot_create_inode(const char *name, uint32_t snap, uint32_t vdi) "s->inode: name %s snap_id 0x%" PRIx32 " vdi 0x%" PRIx32
+
+# ssh.c
+sftp_error(const char *op, const char *ssh_err, int ssh_err_code, unsigned long sftp_err_code) "%s failed: %s (libssh2 error code: %d, sftp error code: %lu)"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# chardev/wctablet.c
+# wctablet.c
 wct_init(void) ""
 wct_cmd_re(void) ""
 wct_cmd_st(void) ""
@@ -395,7 +481,8 @@ wct_cmd_ts(int input) "0x%02x"
 wct_cmd_other(const char *cmd) "%s"
 wct_speed(int speed) "%d"
 
-# chardev/spice.c
+# spice.c
+spice_chr_discard_write(int len) "spice chr write discarded %d"
 spice_vmc_write(ssize_t out, int len) "spice wrote %zd of requested %d"
 spice_vmc_read(int bytes, int len) "spice read %d of requested %d"
 spice_vmc_register_interface(void *scd) "spice vmc registered interface %p"
@@ -404,17 +491,17 @@ spice_vmc_event(int event) "spice vmc event %d"
 
 # See docs/devel/tracing.txt for syntax documentation.
 
-# crypto/tlscreds.c
+# tlscreds.c
 qcrypto_tls_creds_load_dh(void *creds, const char *filename) "TLS creds load DH creds=%p filename=%s"
 qcrypto_tls_creds_get_path(void *creds, const char *filename, const char *path) "TLS creds path creds=%p filename=%s path=%s"
 
-# crypto/tlscredsanon.c
+# tlscredsanon.c
 qcrypto_tls_creds_anon_load(void *creds, const char *dir) "TLS creds anon load creds=%p dir=%s"
 
-# crypto/tlscredspsk.c
+# tlscredspsk.c
 qcrypto_tls_creds_psk_load(void *creds, const char *dir) "TLS creds psk load creds=%p dir=%s"
 
-# crypto/tlscredsx509.c
+# tlscredsx509.c
 qcrypto_tls_creds_x509_load(void *creds, const char *dir) "TLS creds x509 load creds=%p dir=%s"
 qcrypto_tls_creds_x509_check_basic_constraints(void *creds, const char *file, int status) "TLS creds x509 check basic constraints creds=%p file=%s status=%d"
 qcrypto_tls_creds_x509_check_key_usage(void *creds, const char *file, int status, int usage, int critical) "TLS creds x509 check key usage creds=%p file=%s status=%d usage=%d critical=%d"
@@ -422,12 +509,12 @@ qcrypto_tls_creds_x509_check_key_purpose(void *creds, const char *file, int stat
 qcrypto_tls_creds_x509_load_cert(void *creds, int isServer, const char *file) "TLS creds x509 load cert creds=%p isServer=%d file=%s"
 qcrypto_tls_creds_x509_load_cert_list(void *creds, const char *file) "TLS creds x509 load cert list creds=%p file=%s"
 
-# crypto/tlssession.c
-qcrypto_tls_session_new(void *session, void *creds, const char *hostname, const char *aclname, int endpoint) "TLS session new session=%p creds=%p hostname=%s aclname=%s endpoint=%d"
+# tlssession.c
+qcrypto_tls_session_new(void *session, void *creds, const char *hostname, const char *authzid, int endpoint) "TLS session new session=%p creds=%p hostname=%s authzid=%s endpoint=%d"
 qcrypto_tls_session_check_creds(void *session, const char *status) "TLS session check creds session=%p status=%s"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/9pfs/virtio-9p.c
+# 9p.c
 v9fs_rcancel(uint16_t tag, uint8_t id) "tag %d id %d"
 v9fs_rerror(uint16_t tag, uint8_t id, int err) "tag %d id %d err %d"
 v9fs_version(uint16_t tag, uint8_t id, int32_t msize, char* version) "tag %d id %d msize %d version %s"
@@ -477,7 +564,7 @@ v9fs_setattr(uint16_t tag, uint8_t id, int32_t fid, int32_t valid, int32_t mode,
 v9fs_setattr_return(uint16_t tag, uint8_t id) "tag %u id %u"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/acpi/memory_hotplug.c
+# memory_hotplug.c
 mhp_acpi_invalid_slot_selected(uint32_t slot) "0x%"PRIx32
 mhp_acpi_ejecting_invalid_slot(uint32_t slot) "0x%"PRIx32
 mhp_acpi_read_addr_lo(uint32_t slot, uint32_t addr) "slot[0x%"PRIx32"] addr lo: 0x%"PRIx32
@@ -494,7 +581,7 @@ mhp_acpi_clear_remove_evt(uint32_t slot) "slot[0x%"PRIx32"] clear remove event"
 mhp_acpi_pc_dimm_deleted(uint32_t slot) "slot[0x%"PRIx32"] pc-dimm deleted"
 mhp_acpi_pc_dimm_delete_failed(uint32_t slot) "slot[0x%"PRIx32"] pc-dimm delete failed"
 
-# hw/acpi/cpu.c
+# cpu.c
 cpuhp_acpi_invalid_idx_selected(uint32_t idx) "0x%"PRIx32
 cpuhp_acpi_read_flags(uint32_t idx, uint8_t flags) "idx[0x%"PRIx32"] flags: 0x%"PRIx8
 cpuhp_acpi_write_idx(uint32_t idx) "set active cpu idx: 0x%"PRIx32
@@ -508,35 +595,31 @@ cpuhp_acpi_ejecting_cpu(uint32_t idx) "0x%"PRIx32
 cpuhp_acpi_write_ost_ev(uint32_t slot, uint32_t ev) "idx[0x%"PRIx32"] OST EVENT: 0x%"PRIx32
 cpuhp_acpi_write_ost_status(uint32_t slot, uint32_t st) "idx[0x%"PRIx32"] OST STATUS: 0x%"PRIx32
 
-# hw/acpi/tco.c
+# tco.c
 tco_timer_reload(int ticks, int msec) "ticks=%d (%d ms)"
 tco_timer_expired(int timeouts_no, bool strap, bool no_reboot) "timeouts_no=%d no_reboot=%d/%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/alpha/pci.c
+# pci.c
 alpha_pci_iack_write(void) ""
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/arm/virt-acpi-build.c
+# virt-acpi-build.c
 virt_acpi_setup(void) "No fw cfg or ACPI disabled. Bailing out."
 
-# hw/arm/smmu-common.c
+# smmu-common.c
 smmu_add_mr(const char *name) "%s"
-smmu_page_walk(int stage, uint64_t baseaddr, int first_level, uint64_t start, uint64_t end) "stage=%d, baseaddr=0x%"PRIx64", first level=%d, start=0x%"PRIx64", end=0x%"PRIx64
-smmu_lookup_table(int level, uint64_t baseaddr, int granule_sz, uint64_t start, uint64_t end, int flags, uint64_t subpage_size) "level=%d baseaddr=0x%"PRIx64" granule=%d, start=0x%"PRIx64" end=0x%"PRIx64" flags=%d subpage_size=0x%"PRIx64
 smmu_ptw_level(int level, uint64_t iova, size_t subpage_size, uint64_t baseaddr, uint32_t offset, uint64_t pte) "level=%d iova=0x%"PRIx64" subpage_sz=0x%zx baseaddr=0x%"PRIx64" offset=%d => pte=0x%"PRIx64
 smmu_ptw_invalid_pte(int stage, int level, uint64_t baseaddr, uint64_t pteaddr, uint32_t offset, uint64_t pte) "stage=%d level=%d base@=0x%"PRIx64" pte@=0x%"PRIx64" offset=%d pte=0x%"PRIx64
 smmu_ptw_page_pte(int stage, int level,  uint64_t iova, uint64_t baseaddr, uint64_t pteaddr, uint64_t pte, uint64_t address) "stage=%d level=%d iova=0x%"PRIx64" base@=0x%"PRIx64" pte@=0x%"PRIx64" pte=0x%"PRIx64" page address = 0x%"PRIx64
 smmu_ptw_block_pte(int stage, int level, uint64_t baseaddr, uint64_t pteaddr, uint64_t pte, uint64_t iova, uint64_t gpa, int bsize_mb) "stage=%d level=%d base@=0x%"PRIx64" pte@=0x%"PRIx64" pte=0x%"PRIx64" iova=0x%"PRIx64" block address = 0x%"PRIx64" block size = %d MiB"
 smmu_get_pte(uint64_t baseaddr, int index, uint64_t pteaddr, uint64_t pte) "baseaddr=0x%"PRIx64" index=0x%x, pteaddr=0x%"PRIx64", pte=0x%"PRIx64
-smmu_iotlb_cache_hit(uint16_t asid, uint64_t addr, uint32_t hit, uint32_t miss, uint32_t p) "IOTLB cache HIT asid=%d addr=0x%"PRIx64" hit=%d miss=%d hit rate=%d"
-smmu_iotlb_cache_miss(uint16_t asid, uint64_t addr, uint32_t hit, uint32_t miss, uint32_t p) "IOTLB cache MISS asid=%d addr=0x%"PRIx64" hit=%d miss=%d hit rate=%d"
 smmu_iotlb_inv_all(void) "IOTLB invalidate all"
 smmu_iotlb_inv_asid(uint16_t asid) "IOTLB invalidate asid=%d"
 smmu_iotlb_inv_iova(uint16_t asid, uint64_t addr) "IOTLB invalidate asid=%d addr=0x%"PRIx64
 smmu_inv_notifiers_mr(const char *name) "iommu mr=%s"
 
-#hw/arm/smmuv3.c
+# smmuv3.c
 smmuv3_read_mmio(uint64_t addr, uint64_t val, unsigned size, uint32_t r) "addr: 0x%"PRIx64" val:0x%"PRIx64" size: 0x%x(%d)"
 smmuv3_trigger_irq(int irq) "irq=%d"
 smmuv3_write_gerror(uint32_t toggled, uint32_t gerror) "toggled=0x%x, new GERROR=0x%x"
@@ -546,12 +629,7 @@ smmuv3_cmdq_consume(uint32_t prod, uint32_t cons, uint8_t prod_wrap, uint8_t con
 smmuv3_cmdq_opcode(const char *opcode) "<--- %s"
 smmuv3_cmdq_consume_out(uint32_t prod, uint32_t cons, uint8_t prod_wrap, uint8_t cons_wrap) "prod:%d, cons:%d, prod_wrap:%d, cons_wrap:%d "
 smmuv3_cmdq_consume_error(const char *cmd_name, uint8_t cmd_error) "Error on %s command execution: %d"
-smmuv3_update(bool is_empty, uint32_t prod, uint32_t cons, uint8_t prod_wrap, uint8_t cons_wrap) "q empty:%d prod:%d cons:%d p.wrap:%d p.cons:%d"
-smmuv3_update_check_cmd(int error) "cmdq not enabled or error :0x%x"
 smmuv3_write_mmio(uint64_t addr, uint64_t val, unsigned size, uint32_t r) "addr: 0x%"PRIx64" val:0x%"PRIx64" size: 0x%x(%d)"
-smmuv3_write_mmio_idr(uint64_t addr, uint64_t val) "write to RO/Unimpl reg 0x%"PRIx64" val64:0x%"PRIx64
-smmuv3_write_mmio_evtq_cons_bef_clear(uint32_t prod, uint32_t cons, uint8_t prod_wrap, uint8_t cons_wrap) "Before clearing interrupt prod:0x%x cons:0x%x prod.w:%d cons.w:%d"
-smmuv3_write_mmio_evtq_cons_after_clear(uint32_t prod, uint32_t cons, uint8_t prod_wrap, uint8_t cons_wrap) "after clearing interrupt prod:0x%x cons:0x%x prod.w:%d cons.w:%d"
 smmuv3_record_event(const char *type, uint32_t sid) "%s sid=%d"
 smmuv3_find_ste(uint16_t sid, uint32_t features, uint16_t sid_split) "SID:0x%x features:0x%x, sid_split:0x%x"
 smmuv3_find_ste_2lvl(uint64_t strtab_base, uint64_t l1ptr, int l1_ste_offset, uint64_t l2ptr, int l2_ste_offset, int max_l2_ste) "strtab_base:0x%"PRIx64" l1ptr:0x%"PRIx64" l1_off:0x%x, l2ptr:0x%"PRIx64" l2_off:0x%x max_l2_ste:%d"
@@ -572,6 +650,8 @@ smmuv3_cmdq_tlbi_nh_va(int vmid, int asid, uint64_t addr, bool leaf) "vmid =%d a
 smmuv3_cmdq_tlbi_nh_vaa(int vmid, uint64_t addr) "vmid =%d addr=0x%"PRIx64
 smmuv3_cmdq_tlbi_nh(void) ""
 smmuv3_cmdq_tlbi_nh_asid(uint16_t asid) "asid=%d"
+smmu_iotlb_cache_hit(uint16_t asid, uint64_t addr, uint32_t hit, uint32_t miss, uint32_t p) "IOTLB cache HIT asid=%d addr=0x%"PRIx64" hit=%d miss=%d hit rate=%d"
+smmu_iotlb_cache_miss(uint16_t asid, uint64_t addr, uint32_t hit, uint32_t miss, uint32_t p) "IOTLB cache MISS asid=%d addr=0x%"PRIx64" hit=%d miss=%d hit rate=%d"
 smmuv3_config_cache_inv(uint32_t sid) "Config cache INV for sid %d"
 smmuv3_notify_flag_add(const char *iommu) "ADD SMMUNotifier node for iommu mr=%s"
 smmuv3_notify_flag_del(const char *iommu) "DEL SMMUNotifier node for iommu mr=%s"
@@ -579,13 +659,13 @@ smmuv3_inv_notifiers_iova(const char *name, uint16_t asid, uint64_t iova) "iommu
 
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/audio/cs4231.c
+# cs4231.c
 cs4231_mem_readl_dreg(uint32_t reg, uint32_t ret) "read dreg %d: 0x%02x"
 cs4231_mem_readl_reg(uint32_t reg, uint32_t ret) "read reg %d: 0x%08x"
 cs4231_mem_writel_reg(uint32_t reg, uint32_t old, uint32_t val) "write reg %d: 0x%08x -> 0x%08x"
 cs4231_mem_writel_dreg(uint32_t reg, uint32_t old, uint32_t val) "write dreg %d: 0x%02x -> 0x%02x"
 
-# hw/audio/milkymist-ac97.c
+# milkymist-ac97.c
 milkymist_ac97_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_ac97_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_ac97_pulse_irq_crrequest(void) "Pulse IRQ CR request"
@@ -597,18 +677,19 @@ milkymist_ac97_in_cb_transferred(int transferred) "transferred %d"
 milkymist_ac97_out_cb(int free, uint32_t remaining) "free %d remaining %u"
 milkymist_ac97_out_cb_transferred(int transferred) "transferred %d"
 
-# hw/audio/hda-codec.c
+# hda-codec.c
 hda_audio_running(const char *stream, int nr, bool running) "st %s, nr %d, run %d"
 hda_audio_format(const char *stream, int chan, const char *fmt, int freq) "st %s, %d x %s @ %d Hz"
 hda_audio_adjust(const char *stream, int pos) "st %s, pos %d"
 hda_audio_overrun(const char *stream) "st %s"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/block/fdc.c
+# fdc.c
 fdc_ioport_read(uint8_t reg, uint8_t value) "read reg 0x%02x val 0x%02x"
 fdc_ioport_write(uint8_t reg, uint8_t value) "write reg 0x%02x val 0x%02x"
 
-# hw/block/pflash_cfi0?.c
+# pflash_cfi02.c
+# pflash_cfi01.c
 pflash_reset(void) "reset"
 pflash_read(uint64_t offset, uint8_t cmd, int width, uint8_t wcycle) "offset:0x%04"PRIx64" cmd:0x%02x width:%d wcycle:%u"
 pflash_write(uint64_t offset, uint32_t value, int width, uint8_t wcycle) "offset:0x%04"PRIx64" value:0x%03x width:%d wcycle:%u"
@@ -621,18 +702,18 @@ pflash_manufacturer_id(uint16_t id) "Read Manufacturer ID: 0x%04x"
 pflash_device_id(uint16_t id) "Read Device ID: 0x%04x"
 pflash_device_info(uint64_t offset) "Read Device Information offset:0x%04"PRIx64
 
-# hw/block/virtio-blk.c
+# virtio-blk.c
 virtio_blk_req_complete(void *vdev, void *req, int status) "vdev %p req %p status %d"
 virtio_blk_rw_complete(void *vdev, void *req, int ret) "vdev %p req %p ret %d"
 virtio_blk_handle_write(void *vdev, void *req, uint64_t sector, size_t nsectors) "vdev %p req %p sector %"PRIu64" nsectors %zu"
 virtio_blk_handle_read(void *vdev, void *req, uint64_t sector, size_t nsectors) "vdev %p req %p sector %"PRIu64" nsectors %zu"
 virtio_blk_submit_multireq(void *vdev, void *mrb, int start, int num_reqs, uint64_t offset, size_t size, bool is_write) "vdev %p mrb %p start %d num_reqs %d offset %"PRIu64" size %zu is_write %d"
 
-# hw/block/hd-geometry.c
+# hd-geometry.c
 hd_geometry_lchs_guess(void *blk, int cyls, int heads, int secs) "blk %p LCHS %d %d %d"
 hd_geometry_guess(void *blk, uint32_t cyls, uint32_t heads, uint32_t secs, int trans) "blk %p CHS %u %u %u trans %d"
 
-# hw/block/nvme.c
+# nvme.c
 # nvme traces for successful events
 nvme_irq_msix(uint32_t vector) "raising MSI-X IRQ vector %u"
 nvme_irq_pin(void) "pulsing IRQ pin"
@@ -667,9 +748,7 @@ nvme_err_invalid_dma(void) "PRP/SGL is too small for transfer size"
 nvme_err_invalid_prplist_ent(uint64_t prplist) "PRP list entry is null or not page aligned: 0x%"PRIx64""
 nvme_err_invalid_prp2_align(uint64_t prp2) "PRP2 is not page aligned: 0x%"PRIx64""
 nvme_err_invalid_prp2_missing(void) "PRP2 is null and more data to be transferred"
-nvme_err_invalid_field(void) "invalid field"
 nvme_err_invalid_prp(void) "invalid PRP"
-nvme_err_invalid_sgl(void) "invalid SGL"
 nvme_err_invalid_ns(uint32_t ns, uint32_t limit) "invalid namespace %u not within 1-%u"
 nvme_err_invalid_opc(uint8_t opc) "invalid opcode 0x%"PRIx8""
 nvme_err_invalid_admin_opc(uint8_t opc) "invalid admin opcode 0x%"PRIx8""
@@ -725,61 +804,69 @@ nvme_ub_db_wr_invalid_cqhead(uint32_t qid, uint16_t new_head) "completion queue 
 nvme_ub_db_wr_invalid_sq(uint32_t qid) "submission queue doorbell write for nonexistent queue, sqid=%"PRIu32", ignoring"
 nvme_ub_db_wr_invalid_sqtail(uint32_t qid, uint16_t new_tail) "submission queue doorbell write value beyond queue size, sqid=%"PRIu32", new_head=%"PRIu16", ignoring"
 
-# hw/block/xen_disk.c
-xen_disk_alloc(char *name) "%s"
-xen_disk_init(char *name) "%s"
-xen_disk_connect(char *name) "%s"
-xen_disk_disconnect(char *name) "%s"
-xen_disk_free(char *name) "%s"
+# xen-block.c
+xen_block_realize(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
+xen_block_connect(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
+xen_block_disconnect(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
+xen_block_unrealize(const char *type, uint32_t disk, uint32_t partition) "%s d%up%u"
+xen_block_size(const char *type, uint32_t disk, uint32_t partition, int64_t sectors) "%s d%up%u %"PRIi64
+xen_disk_realize(void) ""
+xen_disk_unrealize(void) ""
+xen_cdrom_realize(void) ""
+xen_cdrom_unrealize(void) ""
+xen_block_blockdev_add(char *str) "%s"
+xen_block_blockdev_del(const char *node_name) "%s"
+xen_block_device_create(unsigned int number) "%u"
+xen_block_device_destroy(unsigned int number) "%u"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/block/dataplane/virtio-blk.c
+# virtio-blk.c
 virtio_blk_data_plane_start(void *s) "dataplane %p"
 virtio_blk_data_plane_stop(void *s) "dataplane %p"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/char/parallel.c
+# parallel.c
 parallel_ioport_read(const char *desc, uint16_t addr, uint8_t value) "read [%s] addr 0x%02x val 0x%02x"
 parallel_ioport_write(const char *desc, uint16_t addr, uint8_t value) "write [%s] addr 0x%02x val 0x%02x"
 
-# hw/char/serial.c
+# serial.c
 serial_ioport_read(uint16_t addr, uint8_t value) "read addr 0x%02x val 0x%02x"
 serial_ioport_write(uint16_t addr, uint8_t value) "write addr 0x%02x val 0x%02x"
 
-# hw/char/virtio-serial-bus.c
+# virtio-serial-bus.c
 virtio_serial_send_control_event(unsigned int port, uint16_t event, uint16_t value) "port %u, event %u, value %u"
 virtio_serial_throttle_port(unsigned int port, bool throttle) "port %u, throttle %d"
 virtio_serial_handle_control_message(uint16_t event, uint16_t value) "event %u, value %u"
 virtio_serial_handle_control_message_port(unsigned int port) "port %u"
 
-# hw/char/virtio-console.c
+# virtio-console.c
 virtio_console_flush_buf(unsigned int port, size_t len, ssize_t ret) "port %u, in_len %zu, out_len %zd"
 virtio_console_chr_read(unsigned int port, int size) "port %u, size %d"
 virtio_console_chr_event(unsigned int port, int event) "port %u, event %d"
 
-# hw/char/grlib_apbuart.c
+# grlib_apbuart.c
 grlib_apbuart_event(int event) "event:%d"
 grlib_apbuart_writel_unknown(uint64_t addr, uint32_t value) "addr 0x%"PRIx64" value 0x%x"
 grlib_apbuart_readl_unknown(uint64_t addr) "addr 0x%"PRIx64
 
-# hw/char/lm32_juart.c
+# lm32_juart.c
 lm32_juart_get_jtx(uint32_t value) "jtx 0x%08x"
 lm32_juart_set_jtx(uint32_t value) "jtx 0x%08x"
 lm32_juart_get_jrx(uint32_t value) "jrx 0x%08x"
 lm32_juart_set_jrx(uint32_t value) "jrx 0x%08x"
 
-# hw/char/lm32_uart.c
+# lm32_uart.c
 lm32_uart_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 lm32_uart_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 lm32_uart_irq_state(int level) "irq state %d"
 
-# hw/char/milkymist-uart.c
+# milkymist-uart.c
 milkymist_uart_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_uart_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_uart_raise_irq(void) "Raise IRQ"
 milkymist_uart_lower_irq(void) "Lower IRQ"
 
-# hw/char/escc.c
+# escc.c
 escc_put_queue(char channel, int b) "channel %c put: 0x%02x"
 escc_get_queue(char channel, int val) "channel %c get 0x%02x"
 escc_update_irq(int irq) "IRQ = %d"
@@ -794,7 +881,7 @@ escc_sunkbd_event_out(int ch) "Translated keycode 0x%2.2x"
 escc_kbd_command(int val) "Command %d"
 escc_sunmouse_event(int dx, int dy, int buttons_state) "dx=%d dy=%d buttons=0x%01x"
 
-# hw/char/pl011.c
+# pl011.c
 pl011_irq_state(int level) "irq state %d"
 pl011_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 pl011_read_fifo(int read_count) "FIFO read, read_count now %d"
@@ -803,7 +890,7 @@ pl011_can_receive(uint32_t lcr, int read_count, int r) "LCR 0x%08x read_count %d
 pl011_put_fifo(uint32_t c, int read_count) "new char 0x%x read_count now %d"
 pl011_put_fifo_full(void) "FIFO now full, RXFF set"
 
-# hw/char/cmsdk_apb_uart.c
+# cmsdk-apb-uart.c
 cmsdk_apb_uart_read(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB UART read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_uart_write(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB UART write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_uart_reset(void) "CMSDK APB UART: reset"
@@ -812,35 +899,35 @@ cmsdk_apb_uart_tx_pending(void) "CMSDK APB UART: character send to backend pendi
 cmsdk_apb_uart_tx(uint8_t c) "CMSDK APB UART: character 0x%x sent to backend"
 cmsdk_apb_uart_set_params(int speed) "CMSDK APB UART: params set to %d 8N1"
 
-# hw/char/nrf51_uart.c
+# nrf51_uart.c
 nrf51_uart_read(uint64_t addr, uint64_t r, unsigned int size) "addr 0x%" PRIx64 " value 0x%" PRIx64 " size %u"
 nrf51_uart_write(uint64_t addr, uint64_t value, unsigned int size) "addr 0x%" PRIx64 " value 0x%" PRIx64 " size %u"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/display/jazz_led.c
+# jazz_led.c
 jazz_led_read(uint64_t addr, uint8_t val) "read addr=0x%"PRIx64": 0x%x"
 jazz_led_write(uint64_t addr, uint8_t new) "write addr=0x%"PRIx64": 0x%x"
 
-# hw/display/xenfb.c
+# xenfb.c
 xenfb_mouse_event(void *opaque, int dx, int dy, int dz, int button_state, int abs_pointer_wanted) "%p x %d y %d z %d bs 0x%x abs %d"
 xenfb_key_event(void *opaque, int scancode, int button_state) "%p scancode %d bs 0x%x"
 xenfb_input_connected(void *xendev, int abs_pointer_wanted) "%p abs %d"
 
-# hw/display/g364fb.c
+# g364fb.c
 g364fb_read(uint64_t addr, uint32_t val) "read addr=0x%"PRIx64": 0x%x"
 g364fb_write(uint64_t addr, uint32_t new) "write addr=0x%"PRIx64": 0x%x"
 
-# hw/display/milkymist-tmu2.c
+# milkymist-tmu2.c
 milkymist_tmu2_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_tmu2_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_tmu2_start(void) "Start TMU"
 milkymist_tmu2_pulse_irq(void) "Pulse IRQ"
 
-# hw/display/milkymist-vgafb.c
+# milkymist-vgafb.c
 milkymist_vgafb_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_vgafb_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 
-# hw/display/vmware_vga.c
+# vmware_vga.c
 vmware_value_read(uint32_t index, uint32_t value) "index %d, value 0x%x"
 vmware_value_write(uint32_t index, uint32_t value) "index %d, value 0x%x"
 vmware_palette_read(uint32_t index, uint32_t value) "index %d, value 0x%x"
@@ -849,9 +936,11 @@ vmware_scratch_read(uint32_t index, uint32_t value) "index %d, value 0x%x"
 vmware_scratch_write(uint32_t index, uint32_t value) "index %d, value 0x%x"
 vmware_setmode(uint32_t w, uint32_t h, uint32_t bpp) "%dx%d @ %d bpp"
 
-# hw/display/virtio-gpu.c
+# virtio-gpu-3d.c
+# virtio-gpu.c
 virtio_gpu_features(bool virgl) "virgl %d"
 virtio_gpu_cmd_get_display_info(void) ""
+virtio_gpu_cmd_get_edid(uint32_t scanout) "scanout %d"
 virtio_gpu_cmd_set_scanout(uint32_t id, uint32_t res, uint32_t w, uint32_t h, uint32_t x, uint32_t y) "id %d, res 0x%x, w %d, h %d, x %d, y %d"
 virtio_gpu_cmd_res_create_2d(uint32_t res, uint32_t fmt, uint32_t w, uint32_t h) "res 0x%x, fmt 0x%x, w %d, h %d"
 virtio_gpu_cmd_res_create_3d(uint32_t res, uint32_t fmt, uint32_t w, uint32_t h, uint32_t d) "res 0x%x, fmt 0x%x, w %d, h %d, d %d"
@@ -871,7 +960,7 @@ virtio_gpu_update_cursor(uint32_t scanout, uint32_t x, uint32_t y, const char *t
 virtio_gpu_fence_ctrl(uint64_t fence, uint32_t type) "fence 0x%" PRIx64 ", type 0x%x"
 virtio_gpu_fence_resp(uint64_t fence) "fence 0x%" PRIx64
 
-# hw/display/qxl.c
+# qxl.c
 disable qxl_interface_set_mm_time(int qid, uint32_t mm_time) "%d %d"
 disable qxl_io_write_vga(int qid, const char *mode, uint32_t addr, uint32_t val) "%d %s addr=%u val=%u"
 qxl_create_guest_primary(int qid, uint32_t width, uint32_t height, uint64_t mem, uint32_t format, uint32_t position) "%d %ux%u mem=0x%" PRIx64 " %u,%u"
@@ -889,7 +978,7 @@ qxl_interface_update_area_complete_rest(int qid, uint32_t num_updated_rects) "%d
 qxl_interface_update_area_complete_overflow(int qid, int max) "%d max=%d"
 qxl_interface_update_area_complete_schedule_bh(int qid, uint32_t num_dirty) "%d #dirty=%d"
 qxl_io_destroy_primary_ignored(int qid, const char *mode) "%d %s"
-qxl_io_log(int qid, const uint8_t *log_buf) "%d %s"
+qxl_io_log(int qid, const char *log_buf) "%d %s"
 qxl_io_read_unexpected(int qid) "%d"
 qxl_io_unexpected_vga_mode(int qid, uint64_t addr, uint64_t val, const char *desc) "%d 0x%"PRIx64"=%"PRIu64" (%s)"
 qxl_io_write(int qid, const char *mode, uint64_t addr, const char *aname, uint64_t val, unsigned size, int async) "%d %s addr=%"PRIu64 " (%s) val=%"PRIu64" size=%u async=%d"
@@ -933,36 +1022,39 @@ qxl_client_monitors_config_capped(int qid, int requested, int limit) "%d %d %d"
 qxl_client_monitors_config_crc(int qid, unsigned size, uint32_t crc32) "%d %u %u"
 qxl_set_client_capabilities_unsupported_by_revision(int qid, int revision) "%d revision=%d"
 
-# hw/display/qxl-render.c
+# qxl-render.c
 qxl_render_blit(int32_t stride, int32_t left, int32_t right, int32_t top, int32_t bottom) "stride=%d [%d, %d, %d, %d]"
 qxl_render_guest_primary_resized(int32_t width, int32_t height, int32_t stride, int32_t bytes_pp, int32_t bits_pp) "%dx%d, stride %d, bpp %d, depth %d"
 qxl_render_update_area_done(void *cookie) "%p"
 
-# hw/display/vga.c
+# vga.c
 vga_std_read_io(uint32_t addr, uint32_t val) "addr 0x%x, val 0x%x"
 vga_std_write_io(uint32_t addr, uint32_t val) "addr 0x%x, val 0x%x"
 vga_vbe_read(uint32_t index, uint32_t val) "index 0x%x, val 0x%x"
 vga_vbe_write(uint32_t index, uint32_t val) "index 0x%x, val 0x%x"
 
-# hw/display/cirrus_vga.c
+# cirrus_vga.c
 vga_cirrus_read_io(uint32_t addr, uint32_t val) "addr 0x%x, val 0x%x"
 vga_cirrus_write_io(uint32_t addr, uint32_t val) "addr 0x%x, val 0x%x"
-vga_cirrus_read_blt(uint32_t offset, uint32_t val) "offset 0x%x, val 0x%x"
 vga_cirrus_write_blt(uint32_t offset, uint32_t val) "offset 0x%x, val 0x%x"
 
-# hw/display/sii9022.c
+# sii9022.c
 sii9022_read_reg(uint8_t addr, uint8_t val) "addr 0x%02x, val 0x%02x"
 sii9022_write_reg(uint8_t addr, uint8_t val) "addr 0x%02x, val 0x%02x"
 sii9022_switch_mode(const char *mode) "mode: %s"
+
+# ati.c
+ati_mm_read(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 " %s -> 0x%"PRIx64
+ati_mm_write(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 " %s <- 0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/dma/rc4030.c
+# rc4030.c
 jazzio_read(uint64_t addr, uint32_t ret) "read reg[0x%"PRIx64"] = 0x%x"
 jazzio_write(uint64_t addr, uint32_t val) "write reg[0x%"PRIx64"] = 0x%x"
 rc4030_read(uint64_t addr, uint32_t ret) "read reg[0x%"PRIx64"] = 0x%x"
 rc4030_write(uint64_t addr, uint32_t val) "write reg[0x%"PRIx64"] = 0x%x"
 
-# hw/dma/sparc32_dma.c
+# sparc32_dma.c
 ledma_memory_read(uint64_t addr, int len) "DMA read addr 0x%"PRIx64 " len %d"
 ledma_memory_write(uint64_t addr, int len) "DMA write addr 0x%"PRIx64 " len %d"
 sparc32_dma_set_irq_raise(void) "Raise IRQ"
@@ -974,25 +1066,25 @@ sparc32_dma_mem_writel(uint64_t addr, uint32_t old, uint32_t val) "write dmareg 
 sparc32_dma_enable_raise(void) "Raise DMA enable"
 sparc32_dma_enable_lower(void) "Lower DMA enable"
 
-# hw/dma/i8257.c
+# i8257.c
 i8257_unregistered_dma(int nchan, int dma_pos, int dma_len) "unregistered DMA channel used nchan=%d dma_pos=%d dma_len=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/hppa/pci.c
+# pci.c
 hppa_pci_iack_write(void) ""
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/i2c/core.c
+# core.c
 
 i2c_event(const char *event, uint8_t address) "%s(addr:0x%02x)"
 i2c_send(uint8_t address, uint8_t data) "send(addr:0x%02x) data:0x%02x"
 i2c_recv(uint8_t address, uint8_t data) "recv(addr:0x%02x) data:0x%02x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/i386/x86-iommu.c
+# x86-iommu.c
 x86_iommu_iec_notify(bool global, uint32_t index, uint32_t mask) "Notify IEC invalidation: global=%d index=%" PRIu32 " mask=%" PRIu32
 
-# hw/i386/intel_iommu.c
+# intel_iommu.c
 vtd_inv_desc(const char *type, uint64_t hi, uint64_t lo) "invalidate desc type %s high 0x%"PRIx64" low 0x%"PRIx64
 vtd_inv_desc_cc_domain(uint16_t domain) "context invalidate domain 0x%"PRIx16
 vtd_inv_desc_cc_global(void) "context invalidate globally"
@@ -1019,7 +1111,7 @@ vtd_iotlb_cc_hit(uint8_t bus, uint8_t devfn, uint64_t high, uint64_t low, uint32
 vtd_iotlb_cc_update(uint8_t bus, uint8_t devfn, uint64_t high, uint64_t low, uint32_t gen1, uint32_t gen2) "IOTLB context update bus 0x%"PRIx8" devfn 0x%"PRIx8" high 0x%"PRIx64" low 0x%"PRIx64" gen %"PRIu32" -> gen %"PRIu32
 vtd_iotlb_reset(const char *reason) "IOTLB reset (reason: %s)"
 vtd_fault_disabled(void) "Fault processing disabled for context entry"
-vtd_replay_ce_valid(uint8_t bus, uint8_t dev, uint8_t fn, uint16_t domain, uint64_t hi, uint64_t lo) "replay valid context device %02"PRIx8":%02"PRIx8".%02"PRIx8" domain 0x%"PRIx16" hi 0x%"PRIx64" lo 0x%"PRIx64
+vtd_replay_ce_valid(const char *mode, uint8_t bus, uint8_t dev, uint8_t fn, uint16_t domain, uint64_t hi, uint64_t lo) "%s: replay valid context device %02"PRIx8":%02"PRIx8".%02"PRIx8" domain 0x%"PRIx16" hi 0x%"PRIx64" lo 0x%"PRIx64
 vtd_replay_ce_invalid(uint8_t bus, uint8_t dev, uint8_t fn) "replay invalid context device %02"PRIx8":%02"PRIx8".%02"PRIx8
 vtd_page_walk_level(uint64_t addr, uint32_t level, uint64_t start, uint64_t end) "walk (base=0x%"PRIx64", level=%"PRIu32") iova range 0x%"PRIx64" - 0x%"PRIx64
 vtd_page_walk_one(uint16_t domain, uint64_t iova, uint64_t gpa, uint64_t mask, int perm) "domain 0x%"PRIu16" iova 0x%"PRIx64" -> gpa 0x%"PRIx64" mask 0x%"PRIx64" perm %d"
@@ -1034,7 +1126,7 @@ vtd_pt_enable_fast_path(uint16_t sid, bool success) "sid 0x%"PRIu16" %d"
 vtd_irq_generate(uint64_t addr, uint64_t data) "addr 0x%"PRIx64" data 0x%"PRIx64
 vtd_reg_read(uint64_t addr, uint64_t size) "addr 0x%"PRIx64" size 0x%"PRIx64
 vtd_reg_write(uint64_t addr, uint64_t size, uint64_t val) "addr 0x%"PRIx64" size 0x%"PRIx64" value 0x%"PRIx64
-vtd_reg_dmar_root(uint64_t addr, bool extended) "addr 0x%"PRIx64" extended %d"
+vtd_reg_dmar_root(uint64_t addr, bool scalable) "addr 0x%"PRIx64" scalable %d"
 vtd_reg_ir_root(uint64_t addr, uint32_t size) "addr 0x%"PRIx64" size 0x%"PRIx32
 vtd_reg_write_gcmd(uint32_t status, uint32_t val) "status 0x%"PRIx32" value 0x%"PRIx32
 vtd_reg_write_fectl(uint32_t value) "value 0x%"PRIx32
@@ -1056,7 +1148,7 @@ vtd_warn_invalid_qi_tail(uint16_t tail) "tail 0x%"PRIx16
 vtd_warn_ir_vector(uint16_t sid, int index, int vec, int target) "sid 0x%"PRIx16" index %d vec %d (should be: %d)"
 vtd_warn_ir_trigger(uint16_t sid, int index, int trig, int target) "sid 0x%"PRIx16" index %d trigger %d (should be: %d)"
 
-# hw/i386/amd_iommu.c
+# amd_iommu.c
 amdvi_evntlog_fail(uint64_t addr, uint32_t head) "error: fail to write at addr 0x%"PRIx64" +  offset 0x%"PRIx32
 amdvi_cache_update(uint16_t domid, uint8_t bus, uint8_t slot, uint8_t func, uint64_t gpa, uint64_t txaddr) " update iotlb domid 0x%"PRIx16" devid: %02x:%02x.%x gpa 0x%"PRIx64" hpa 0x%"PRIx64
 amdvi_completion_wait_fail(uint64_t addr) "error: fail to write at address 0x%"PRIx64
@@ -1095,17 +1187,17 @@ amdvi_ir_err(const char *str) "%s"
 amdvi_ir_intctl(uint8_t val) "int_ctl 0x%"PRIx8
 amdvi_ir_target_abort(const char *str) "%s"
 amdvi_ir_delivery_mode(const char *str) "%s"
-amdvi_ir_generate_msi_message(uint8_t vector, uint8_t delivery_mode, uint8_t dest_mode, uint8_t dest, uint8_t rh) "vector %d delivery-mode %d dest-mode %d dest-id %d rh %d"
-amdvi_ir_irte_ga(uint64_t addr, uint64_t data) "addr 0x%"PRIx64" offset 0x%"PRIx64
 amdvi_ir_irte_ga_val(uint64_t hi, uint64_t lo) "hi 0x%"PRIx64" lo 0x%"PRIx64
 
-# hw/i386/vmport.c
+# vmport.c
 vmport_register(unsigned char command, void *func, void *opaque) "command: 0x%02x func: %p opaque: %p"
 vmport_command(unsigned char command) "command: 0x%02x"
-# hw/i386/xen/xen_platform.c
+# See docs/devel/tracing.txt for syntax documentation.
+
+# xen_platform.c
 xen_platform_log(char *s) "xen platform: %s"
 
-# hw/i386/xen/xen_pvdevice.c
+# xen_pvdevice.c
 xen_pv_mmio_read(uint64_t addr) "WARNING: read from Xen PV Device MMIO space (address 0x%"PRIx64")"
 xen_pv_mmio_write(uint64_t addr) "WARNING: write to Xen PV Device MMIO space (address 0x%"PRIx64")"
 
@@ -1130,7 +1222,7 @@ xen_map_cache_return(void* ptr) "%p"
 
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/ide/core.c
+# core.c
 # portio
 ide_ioport_read(uint32_t addr, const char *reg, uint32_t val, void *bus, void *s)  "IDE PIO rd @ 0x%"PRIx32" (%s); val 0x%02"PRIx32"; bus %p IDEState %p"
 ide_ioport_write(uint32_t addr, const char *reg, uint32_t val, void *bus, void *s) "IDE PIO wr @ 0x%"PRIx32" (%s); val 0x%02"PRIx32"; bus %p IDEState %p"
@@ -1153,30 +1245,30 @@ ide_dma_cb(void *s, int64_t sector_num, int n, const char *dma) "IDEState %p; se
 
 # BMDMA HBAs:
 
-# hw/ide/cmd646.c
+# cmd646.c
 bmdma_read_cmd646(uint64_t addr, uint32_t val) "bmdma: readb 0x%"PRIx64" : 0x%02x"
 bmdma_write_cmd646(uint64_t addr, uint64_t val) "bmdma: writeb 0x%"PRIx64" : 0x%02"PRIx64
 
-# hw/ide/pci.c
+# pci.c
 bmdma_reset(void) ""
 bmdma_cmd_writeb(uint32_t val) "val: 0x%08x"
 bmdma_addr_read(uint64_t data) "data: 0x%016"PRIx64
 bmdma_addr_write(uint64_t data) "data: 0x%016"PRIx64
 
-# hw/ide/piix.c
+# piix.c
 bmdma_read(uint64_t addr, uint8_t val) "bmdma: readb 0x%"PRIx64" : 0x%02x"
 bmdma_write(uint64_t addr, uint64_t val) "bmdma: writeb 0x%"PRIx64" : 0x%02"PRIx64
 
-# hw/ide/sii3112.c
+# sii3112.c
 sii3112_read(int size, uint64_t addr, uint64_t val) "bmdma: read (size %d) 0x%"PRIx64" : 0x%02"PRIx64
 sii3112_write(int size, uint64_t addr, uint64_t val) "bmdma: write (size %d) 0x%"PRIx64" : 0x%02"PRIx64
 sii3112_set_irq(int channel, int level) "channel %d level %d"
 
-# hw/ide/via.c
+# via.c
 bmdma_read_via(uint64_t addr, uint32_t val) "bmdma: readb 0x%"PRIx64" : 0x%02x"
 bmdma_write_via(uint64_t addr, uint64_t val) "bmdma: writeb 0x%"PRIx64" : 0x%02"PRIx64
 
-# hw/ide/atapi.c
+# atapi.c
 cd_read_sector_sync(int lba) "lba=%d"
 cd_read_sector_cb(int lba, int ret) "lba=%d ret=%d"
 cd_read_sector(int lba) "lba=%d"
@@ -1192,7 +1284,7 @@ ide_atapi_cmd_read_dma_cb_aio(void *s, int lba, int n) "IDEState: %p; aio read: 
 # Warning: Verbose
 ide_atapi_cmd_packet(void *s, uint16_t limit, const char *packet) "IDEState: %p; limit=0x%x packet: %s"
 
-# hw/ide/ahci.c
+# ahci.c
 ahci_port_read(void *s, int port, const char *reg, int offset, uint32_t ret) "ahci(%p)[%d]: port read [reg:%s] @ 0x%x: 0x%08x"
 ahci_port_read_default(void *s, int port, const char *reg, int offset) "ahci(%p)[%d]: unimplemented port read [reg:%s] @ 0x%x"
 ahci_irq_raise(void *s) "ahci(%p): raise irq"
@@ -1221,7 +1313,6 @@ ahci_populate_sglist_short_map(void *s, int port) "ahci(%p)[%d]: mapped less tha
 ahci_populate_sglist_bad_offset(void *s, int port, int off_idx, int64_t off_pos) "ahci(%p)[%d]: Incorrect offset! off_idx: %d, off_pos: %"PRId64
 ncq_finish(void *s, int port, uint8_t tag) "ahci(%p)[%d][tag:%d]: NCQ transfer finished"
 execute_ncq_command_read(void *s, int port, uint8_t tag, int count, int64_t lba) "ahci(%p)[%d][tag:%d]: NCQ reading %d sectors from LBA %"PRId64
-execute_ncq_command_write(void *s, int port, uint8_t tag, int count, int64_t lba) "ahci(%p)[%d][tag:%d]: NCQ writing %d sectors to LBA %"PRId64
 execute_ncq_command_unsup(void *s, int port, uint8_t tag, uint8_t cmd) "ahci(%p)[%d][tag:%d]: error: unsupported NCQ command (0x%02x) received"
 process_ncq_command_mismatch(void *s, int port, uint8_t tag, uint8_t slot) "ahci(%p)[%d][tag:%d]: Warning: NCQ slot (%d) did not match the given tag"
 process_ncq_command_aux(void *s, int port, uint8_t tag) "ahci(%p)[%d][tag:%d]: Warn: Attempt to use NCQ auxiliary fields"
@@ -1245,29 +1336,38 @@ ahci_dma_prepare_buf_fail(void *s, int port) "ahci(%p)[%d]: sglist population fa
 ahci_dma_rw_buf(void *s, int port, int l) "ahci(%p)[%d] len=0x%x"
 ahci_cmd_done(void *s, int port) "ahci(%p)[%d]: cmd done"
 ahci_reset(void *s) "ahci(%p): HBA reset"
-allwinner_ahci_mem_read(void *s, void *a, uint64_t addr, uint64_t val, unsigned size) "ahci(%p): read a=%p addr=0x%"PRIx64" val=0x%"PRIx64", size=%d"
-allwinner_ahci_mem_write(void *s, void *a, uint64_t addr, uint64_t val, unsigned size) "ahci(%p): write a=%p addr=0x%"PRIx64" val=0x%"PRIx64", size=%d"
 
 # Warning: Verbose
 handle_reg_h2d_fis_dump(void *s, int port, const char *fis) "ahci(%p)[%d]: %s"
 handle_cmd_fis_dump(void *s, int port, const char *fis) "ahci(%p)[%d]: %s"
+
+# ahci-allwinner.c
+allwinner_ahci_mem_read(void *s, void *a, uint64_t addr, uint64_t val, unsigned size) "ahci(%p): read a=%p addr=0x%"PRIx64" val=0x%"PRIx64", size=%d"
+allwinner_ahci_mem_write(void *s, void *a, uint64_t addr, uint64_t val, unsigned size) "ahci(%p): write a=%p addr=0x%"PRIx64" val=0x%"PRIx64", size=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/input/adb-kbd.c
+# adb-kbd.c
 adb_kbd_no_key(void) "Ignoring NO_KEY"
 adb_kbd_writereg(int reg, uint8_t val) "reg %d val 0x%2.2x"
 adb_kbd_readreg(int reg, uint8_t val0, uint8_t val1) "reg %d obuf[0] 0x%2.2x obuf[1] 0x%2.2x"
 adb_kbd_request_change_addr(int devaddr) "change addr to 0x%x"
 adb_kbd_request_change_addr_and_handler(int devaddr, int handler) "change addr and handler to 0x%x, 0x%x"
 
-# hw/input/adb-mouse.c
+# adb-mouse.c
 adb_mouse_flush(void) "flush"
 adb_mouse_writereg(int reg, uint8_t val) "reg %d val 0x%2.2x"
 adb_mouse_readreg(int reg, uint8_t val0, uint8_t val1) "reg %d obuf[0] 0x%2.2x obuf[1] 0x%2.2x"
 adb_mouse_request_change_addr(int devaddr) "change addr to 0x%x"
 adb_mouse_request_change_addr_and_handler(int devaddr, int handler) "change addr and handler to 0x%x, 0x%x"
 
-# hw/input/ps2.c
+# pckbd.c
+pckbd_kbd_read_data(uint32_t val) "0x%02x"
+pckbd_kbd_read_status(int status) "0x%02x"
+pckbd_outport_write(uint32_t val) "0x%02x"
+pckbd_kbd_write_command(uint64_t val) "0x%02"PRIx64
+pckbd_kbd_write_data(uint64_t val) "0x%02"PRIx64
+
+# ps2.c
 ps2_put_keycode(void *opaque, int keycode) "%p keycode 0x%02x"
 ps2_keyboard_event(void *opaque, int qcode, int down, unsigned int modifier, unsigned int modifiers) "%p qcode %d down %d modifier 0x%x modifiers 0x%x"
 ps2_read_data(void *opaque) "%p"
@@ -1283,32 +1383,32 @@ ps2_mouse_reset(void *opaque) "%p"
 ps2_kbd_init(void *s) "%p"
 ps2_mouse_init(void *s) "%p"
 
-# hw/input/milkymist-softusb.c
+# milkymist-softusb.c
 milkymist_softusb_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_softusb_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_softusb_mevt(uint8_t m) "m %d"
 milkymist_softusb_kevt(uint8_t m) "m %d"
 milkymist_softusb_pulse_irq(void) "Pulse IRQ"
 
-# hw/input/hid.c
+# hid.c
 hid_kbd_queue_full(void) "queue full"
 hid_kbd_queue_empty(void) "queue empty"
 
-# hw/input/tsc2005.c
+# tsc2005.c
 tsc2005_sense(const char *state) "touchscreen sense %s"
 
-# hw/input/virtio
+# virtio-input.c
 virtio_input_queue_full(void) "queue full"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/intc/i8259.c
+# i8259.c
 pic_update_irq(bool master, uint8_t imr, uint8_t irr, uint8_t padd) "master %d imr %"PRIu8" irr %"PRIu8" padd %"PRIu8
 pic_set_irq(bool master, int irq, int level) "master %d irq %d level %d"
 pic_interrupt(int irq, int intno) "irq %d intno %d"
 pic_ioport_write(bool master, uint64_t addr, uint64_t val) "master %d addr 0x%"PRIx64" val 0x%"PRIx64
 pic_ioport_read(bool master, uint64_t addr, int val) "master %d addr 0x%"PRIx64" val 0x%x"
 
-# hw/intc/apic_common.c
+# apic_common.c
 cpu_set_apic_base(uint64_t val) "0x%016"PRIx64
 cpu_get_apic_base(uint64_t val) "0x%016"PRIx64
 # coalescing
@@ -1316,13 +1416,13 @@ apic_report_irq_delivered(int apic_irq_delivered) "coalescing %d"
 apic_reset_irq_delivered(int apic_irq_delivered) "old coalescing %d"
 apic_get_irq_delivered(int apic_irq_delivered) "returning coalescing %d"
 
-# hw/intc/apic.c
+# apic.c
 apic_local_deliver(int vector, uint32_t lvt) "vector %d delivery mode %d"
 apic_deliver_irq(uint8_t dest, uint8_t dest_mode, uint8_t delivery_mode, uint8_t vector_num, uint8_t trigger_mode) "dest %d dest_mode %d delivery_mode %d vector %d trigger_mode %d"
 apic_mem_readl(uint64_t addr, uint32_t val)  "0x%"PRIx64" = 0x%08x"
 apic_mem_writel(uint64_t addr, uint32_t val) "0x%"PRIx64" = 0x%08x"
 
-# hw/intc/ioapic.c
+# ioapic.c
 ioapic_set_remote_irr(int n) "set remote irr for pin %d"
 ioapic_clear_remote_irr(int n, int vector) "clear remote irr for pin %d vector %d"
 ioapic_eoi_broadcast(int vector) "EOI broadcast for vector %d"
@@ -1330,7 +1430,7 @@ ioapic_mem_read(uint8_t addr, uint8_t regsel, uint8_t size, uint32_t val) "ioapi
 ioapic_mem_write(uint8_t addr, uint8_t regsel, uint8_t size, uint32_t val) "ioapic mem write addr 0x%"PRIx8" regsel: 0x%"PRIx8" size 0x%"PRIx8" val 0x%"PRIx32
 ioapic_set_irq(int vector, int level) "vector: %d level: %d"
 
-# hw/intc/slavio_intctl.c
+# slavio_intctl.c
 slavio_intctl_mem_readl(uint32_t cpu, uint64_t addr, uint32_t ret) "read cpu %d reg 0x%"PRIx64" = 0x%x"
 slavio_intctl_mem_writel(uint32_t cpu, uint64_t addr, uint32_t val) "write cpu %d reg 0x%"PRIx64" = 0x%x"
 slavio_intctl_mem_writel_clear(uint32_t cpu, uint32_t val, uint32_t intreg_pending) "Cleared cpu %d irq mask 0x%x, curmask 0x%x"
@@ -1344,14 +1444,14 @@ slavio_check_interrupts(uint32_t pending, uint32_t intregm_disabled) "pending 0x
 slavio_set_irq(uint32_t target_cpu, int irq, uint32_t pil, int level) "Set cpu %d irq %d -> pil %d level %d"
 slavio_set_timer_irq_cpu(int cpu, int level) "Set cpu %d local timer level %d"
 
-# hw/intc/grlib_irqmp.c
+# grlib_irqmp.c
 grlib_irqmp_check_irqs(uint32_t pend, uint32_t force, uint32_t mask, uint32_t lvl1, uint32_t lvl2) "pend:0x%04x force:0x%04x mask:0x%04x lvl1:0x%04x lvl0:0x%04x"
 grlib_irqmp_ack(int intno) "interrupt:%d"
 grlib_irqmp_set_irq(int irq) "Raise CPU IRQ %d"
 grlib_irqmp_readl_unknown(uint64_t addr) "addr 0x%"PRIx64
 grlib_irqmp_writel_unknown(uint64_t addr, uint32_t value) "addr 0x%"PRIx64" value 0x%x"
 
-# hw/intc/lm32_pic.c
+# lm32_pic.c
 lm32_pic_raise_irq(void) "Raise CPU interrupt"
 lm32_pic_lower_irq(void) "Lower CPU interrupt"
 lm32_pic_interrupt(int irq, int level) "Set IRQ%d %d"
@@ -1360,7 +1460,7 @@ lm32_pic_set_ip(uint32_t ip) "ip 0x%08x"
 lm32_pic_get_im(uint32_t im) "im 0x%08x"
 lm32_pic_get_ip(uint32_t ip) "ip 0x%08x"
 
-# hw/intc/xics.c
+# xics.c
 xics_icp_check_ipi(int server, uint8_t mfrr) "CPU %d can take IPI mfrr=0x%x"
 xics_icp_accept(uint32_t old_xirr, uint32_t new_xirr) "icp_accept: XIRR 0x%"PRIx32"->0x%"PRIx32
 xics_icp_eoi(int server, uint32_t xirr, uint32_t new_xirr) "icp_eoi: server %d given XIRR 0x%"PRIx32" new XIRR 0x%"PRIx32
@@ -1373,23 +1473,23 @@ xics_ics_simple_write_xive(int nr, int srcno, int server, uint8_t priority) "ics
 xics_ics_simple_reject(int nr, int srcno) "reject irq 0x%x [src %d]"
 xics_ics_simple_eoi(int nr) "ics_eoi: irq 0x%x"
 
-# hw/intc/s390_flic_kvm.c
+# s390_flic_kvm.c
 flic_create_device(int err) "flic: create device failed %d"
 flic_no_device_api(int err) "flic: no Device Contral API support %d"
 flic_reset_failed(int err) "flic: reset failed %d"
 
-# hw/intc/s390_flic.c
+# s390_flic.c
 qemu_s390_airq_suppressed(uint8_t type, uint8_t isc) "flic: adapter I/O interrupt suppressed (type 0x%x isc 0x%x)"
 qemu_s390_suppress_airq(uint8_t isc, const char *from, const char *to) "flic: for isc 0x%x, suppress airq by modifying ais mode from %s to %s"
 
-# hw/intc/aspeed_vic.c
+# aspeed_vic.c
 aspeed_vic_set_irq(int irq, int level) "Enabling IRQ %d: %d"
 aspeed_vic_update_fiq(int flags) "Raising FIQ: %d"
 aspeed_vic_update_irq(int flags) "Raising IRQ: %d"
 aspeed_vic_read(uint64_t offset, unsigned size, uint32_t value) "From 0x%" PRIx64 " of size %u: 0x%" PRIx32
 aspeed_vic_write(uint64_t offset, unsigned size, uint32_t data) "To 0x%" PRIx64 " of size %u: 0x%" PRIx32
 
-# hw/intc/arm_gic.c
+# arm_gic.c
 gic_enable_irq(int irq) "irq %d enabled"
 gic_disable_irq(int irq) "irq %d disabled"
 gic_set_irq(int irq, int level, int cpumask, int target) "irq %d level %d cpumask 0x%x target 0x%x"
@@ -1405,7 +1505,7 @@ gic_dist_write(int addr, unsigned int size, uint32_t val) "dist write at 0x%08x 
 gic_lr_entry(int cpu, int entry, uint32_t val) "cpu %d: new lr entry %d: 0x%08" PRIx32
 gic_update_maintenance_irq(int cpu, int val) "cpu %d: maintenance = %d"
 
-# hw/intc/arm_gicv3_cpuif.c
+# arm_gicv3_cpuif.c
 gicv3_icc_pmr_read(uint32_t cpu, uint64_t val) "GICv3 ICC_PMR read cpu 0x%x value 0x%" PRIx64
 gicv3_icc_pmr_write(uint32_t cpu, uint64_t val) "GICv3 ICC_PMR write cpu 0x%x value 0x%" PRIx64
 gicv3_icc_bpr_read(int grp, uint32_t cpu, uint64_t val) "GICv3 ICC_BPR%d read cpu 0x%x value 0x%" PRIx64
@@ -1464,14 +1564,14 @@ gicv3_icv_eoir_write(int grp, uint32_t cpu, uint64_t val) "GICv3 ICV_EOIR%d writ
 gicv3_cpuif_virt_update(uint32_t cpuid, int idx) "GICv3 CPU i/f 0x%x virt HPPI update LR index %d"
 gicv3_cpuif_virt_set_irqs(uint32_t cpuid, int fiqlevel, int irqlevel, int maintlevel) "GICv3 CPU i/f 0x%x virt HPPI update: setting FIQ %d IRQ %d maintenance-irq %d"
 
-# hw/intc/arm_gicv3_dist.c
+# arm_gicv3_dist.c
 gicv3_dist_read(uint64_t offset, uint64_t data, unsigned size, bool secure) "GICv3 distributor read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u secure %d"
 gicv3_dist_badread(uint64_t offset, unsigned size, bool secure) "GICv3 distributor read: offset 0x%" PRIx64 " size %u secure %d: error"
 gicv3_dist_write(uint64_t offset, uint64_t data, unsigned size, bool secure) "GICv3 distributor write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u secure %d"
 gicv3_dist_badwrite(uint64_t offset, uint64_t data, unsigned size, bool secure) "GICv3 distributor write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u secure %d: error"
 gicv3_dist_set_irq(int irq, int level) "GICv3 distributor interrupt %d level changed to %d"
 
-# hw/intc/arm_gicv3_redist.c
+# arm_gicv3_redist.c
 gicv3_redist_read(uint32_t cpu, uint64_t offset, uint64_t data, unsigned size, bool secure) "GICv3 redistributor 0x%x read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u secure %d"
 gicv3_redist_badread(uint32_t cpu, uint64_t offset, unsigned size, bool secure) "GICv3 redistributor 0x%x read: offset 0x%" PRIx64 " size %u secure %d: error"
 gicv3_redist_write(uint32_t cpu, uint64_t offset, uint64_t data, unsigned size, bool secure) "GICv3 redistributor 0x%x write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u secure %d"
@@ -1479,7 +1579,7 @@ gicv3_redist_badwrite(uint32_t cpu, uint64_t offset, uint64_t data, unsigned siz
 gicv3_redist_set_irq(uint32_t cpu, int irq, int level) "GICv3 redistributor 0x%x interrupt %d level changed to %d"
 gicv3_redist_send_sgi(uint32_t cpu, int irq) "GICv3 redistributor 0x%x pending SGI %d"
 
-# hw/intc/armv7m_nvic.c
+# armv7m_nvic.c
 nvic_recompute_state(int vectpending, int vectpending_prio, int exception_prio) "NVIC state recomputed: vectpending %d vectpending_prio %d exception_prio %d"
 nvic_recompute_state_secure(int vectpending, bool vectpending_is_s_banked, int vectpending_prio, int exception_prio) "NVIC state recomputed: vectpending %d is_s_banked %d vectpending_prio %d exception_prio %d"
 nvic_set_prio(int irq, bool secure, uint8_t prio) "NVIC set irq %d secure-bank %d priority %d"
@@ -1488,7 +1588,6 @@ nvic_escalate_prio(int irq, int irqprio, int runprio) "NVIC escalating irq %d to
 nvic_escalate_disabled(int irq) "NVIC escalating irq %d to HardFault: disabled"
 nvic_set_pending(int irq, bool secure, bool targets_secure, bool derived, int en, int prio) "NVIC set pending irq %d secure-bank %d targets_secure %d derived %d (enabled: %d priority %d)"
 nvic_clear_pending(int irq, bool secure, int en, int prio) "NVIC clear pending irq %d secure-bank %d (enabled: %d priority %d)"
-nvic_set_pending_level(int irq) "NVIC set pending: irq %d higher prio than vectpending: setting irq line to 1"
 nvic_acknowledge_irq(int irq, int prio) "NVIC acknowledge IRQ: %d now active (prio %d)"
 nvic_get_pending_irq_info(int irq, bool secure) "NVIC next IRQ %d: targets_secure: %d"
 nvic_complete_irq(int irq, bool secure) "NVIC complete IRQ %d (secure %d)"
@@ -1497,32 +1596,32 @@ nvic_set_nmi_level(int level) "NVIC external NMI level set to %d"
 nvic_sysreg_read(uint64_t addr, uint32_t value, unsigned size) "NVIC sysreg read addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
 nvic_sysreg_write(uint64_t addr, uint32_t value, unsigned size) "NVIC sysreg write addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
 
-# hw/intc/heathrow_pic.c
+# heathrow_pic.c
 heathrow_write(uint64_t addr, unsigned int n, uint64_t value) "0x%"PRIx64" %u: 0x%"PRIx64
 heathrow_read(uint64_t addr, unsigned int n, uint64_t value) "0x%"PRIx64" %u: 0x%"PRIx64
 heathrow_set_irq(int num, int level) "set_irq: num=0x%02x level=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/isa/isa-superio.c
+# isa-superio.c
 superio_create_parallel(int id, uint16_t base, unsigned int irq) "id=%d, base 0x%03x, irq %u"
 superio_create_serial(int id, uint16_t base, unsigned int irq) "id=%d, base 0x%03x, irq %u"
 superio_create_floppy(int id, uint16_t base, unsigned int irq) "id=%d, base 0x%03x, irq %u"
 superio_create_ide(int id, uint16_t base, unsigned int irq) "id=%d, base 0x%03x, irq %u"
 
-# hw/isa/pc87312.c
+# pc87312.c
 pc87312_io_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 pc87312_io_write(uint32_t addr, uint32_t val) "write addr=0x%x val=0x%x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/mem/pc-dimm.c
+# pc-dimm.c
 mhp_pc_dimm_assigned_slot(int slot) "%d"
-# hw/mem/memory-device.c
+# memory-device.c
 memory_device_pre_plug(const char *id, uint64_t addr) "id=%s addr=0x%"PRIx64
 memory_device_plug(const char *id, uint64_t addr) "id=%s addr=0x%"PRIx64
 memory_device_unplug(const char *id, uint64_t addr) "id=%s addr=0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/misc/eccmemctl.c
+# eccmemctl.c
 ecc_mem_writel_mer(uint32_t val) "Write memory enable 0x%08x"
 ecc_mem_writel_mdr(uint32_t val) "Write memory delay 0x%08x"
 ecc_mem_writel_mfsr(uint32_t val) "Write memory fault status 0x%08x"
@@ -1542,7 +1641,7 @@ ecc_mem_readl_ecr1(uint32_t ret) "Read event count 2 0x%08x"
 ecc_diag_mem_writeb(uint64_t addr, uint32_t val) "Write diagnostic %"PRId64" = 0x%02x"
 ecc_diag_mem_readb(uint64_t addr, uint32_t ret) "Read diagnostic %"PRId64"= 0x%02x"
 
-# hw/misc/slavio_misc.c
+# slavio_misc.c
 slavio_misc_update_irq_raise(void) "Raise IRQ"
 slavio_misc_update_irq_lower(void) "Lower IRQ"
 slavio_set_power_fail(int power_failing, uint8_t config) "Power fail: %d, config: %d"
@@ -1563,20 +1662,20 @@ slavio_sysctrl_mem_readl(uint32_t ret) "Read system control 0x%08x"
 slavio_led_mem_writew(uint32_t val) "Write diagnostic LED 0x%04x"
 slavio_led_mem_readw(uint32_t ret) "Read diagnostic LED 0x%04x"
 
-# hw/misc/milkymist-hpdmc.c
+# milkymist-hpdmc.c
 milkymist_hpdmc_memory_read(uint32_t addr, uint32_t value) "addr=0x%08x value=0x%08x"
 milkymist_hpdmc_memory_write(uint32_t addr, uint32_t value) "addr=0x%08x value=0x%08x"
 
-# hw/misc/milkymist-pfpu.c
+# milkymist-pfpu.c
 milkymist_pfpu_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_pfpu_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_pfpu_vectout(uint32_t a, uint32_t b, uint32_t dma_ptr) "a 0x%08x b 0x%08x dma_ptr 0x%08x"
 milkymist_pfpu_pulse_irq(void) "Pulse IRQ"
 
-# hw/misc/aspeed_scu.c
+# aspeed_scu.c
 aspeed_scu_write(uint64_t offset, unsigned size, uint32_t data) "To 0x%" PRIx64 " of size %u: 0x%" PRIx32
 
-# hw/misc/mps2_scc.c
+# mps2-scc.c
 mps2_scc_read(uint64_t offset, uint64_t data, unsigned size) "MPS2 SCC read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 mps2_scc_write(uint64_t offset, uint64_t data, unsigned size) "MPS2 SCC write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 mps2_scc_reset(void) "MPS2 SCC: reset"
@@ -1584,29 +1683,29 @@ mps2_scc_leds(char led7, char led6, char led5, char led4, char led3, char led2, 
 mps2_scc_cfg_write(unsigned function, unsigned device, uint32_t value) "MPS2 SCC config write: function %d device %d data 0x%" PRIx32
 mps2_scc_cfg_read(unsigned function, unsigned device, uint32_t value) "MPS2 SCC config read: function %d device %d data 0x%" PRIx32
 
-# hw/misc/mps2_fpgaio.c
+# mps2-fpgaio.c
 mps2_fpgaio_read(uint64_t offset, uint64_t data, unsigned size) "MPS2 FPGAIO read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 mps2_fpgaio_write(uint64_t offset, uint64_t data, unsigned size) "MPS2 FPGAIO write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 mps2_fpgaio_reset(void) "MPS2 FPGAIO: reset"
 mps2_fpgaio_leds(char led1, char led0) "MPS2 FPGAIO LEDs: %c%c"
 
-# hw/misc/msf2-sysreg.c
+# msf2-sysreg.c
 msf2_sysreg_write(uint64_t offset, uint32_t val, uint32_t prev) "msf2-sysreg write: addr 0x%08" PRIx64 " data 0x%" PRIx32 " prev 0x%" PRIx32
 msf2_sysreg_read(uint64_t offset, uint32_t val) "msf2-sysreg read: addr 0x%08" PRIx64 " data 0x%08" PRIx32
 msf2_sysreg_write_pll_status(void) "Invalid write to read only PLL status register"
 
-#hw/misc/imx7_gpr.c
+# imx7_gpr.c
 imx7_gpr_read(uint64_t offset) "addr 0x%08" PRIx64
 imx7_gpr_write(uint64_t offset, uint64_t value) "addr 0x%08" PRIx64 "value 0x%08" PRIx64
 
-# hw/misc/mos6522.c
+# mos6522.c
 mos6522_set_counter(int index, unsigned int val) "T%d.counter=%d"
 mos6522_get_next_irq_time(uint16_t latch, int64_t d, int64_t delta) "latch=%d counter=0x%"PRId64 " delta_next=0x%"PRId64
 mos6522_set_sr_int(void) "set sr_int"
 mos6522_write(uint64_t addr, uint64_t val) "reg=0x%"PRIx64 " val=0x%"PRIx64
 mos6522_read(uint64_t addr, unsigned val) "reg=0x%"PRIx64 " val=0x%x"
 
-# hw/misc/tz-mpc.c
+# tz-mpc.c
 tz_mpc_reg_read(uint32_t offset, uint64_t data, unsigned size) "TZ MPC regs read: offset 0x%x data 0x%" PRIx64 " size %u"
 tz_mpc_reg_write(uint32_t offset, uint64_t data, unsigned size) "TZ MPC regs write: offset 0x%x data 0x%" PRIx64 " size %u"
 tz_mpc_mem_blocked_read(uint64_t addr, unsigned size, bool secure) "TZ MPC blocked read: offset 0x%" PRIx64 " size %u secure %d"
@@ -1614,16 +1713,15 @@ tz_mpc_mem_blocked_write(uint64_t addr, uint64_t data, unsigned size, bool secur
 tz_mpc_translate(uint64_t addr, int flags, const char *idx, const char *res) "TZ MPC translate: addr 0x%" PRIx64 " flags 0x%x iommu_idx %s: %s"
 tz_mpc_iommu_notify(uint64_t addr) "TZ MPC iommu: notifying UNMAP/MAP for 0x%" PRIx64
 
-# hw/misc/tz-msc.c
+# tz-msc.c
 tz_msc_reset(void) "TZ MSC: reset"
 tz_msc_cfg_nonsec(int level) "TZ MSC: cfg_nonsec = %d"
 tz_msc_cfg_sec_resp(int level) "TZ MSC: cfg_sec_resp = %d"
-tz_msc_irq_enable(int level) "TZ MSC: int_enable = %d"
 tz_msc_irq_clear(int level) "TZ MSC: int_clear = %d"
 tz_msc_update_irq(int level) "TZ MSC: setting irq line to %d"
 tz_msc_access_blocked(uint64_t offset) "TZ MSC: offset 0x%" PRIx64 " access blocked"
 
-# hw/misc/tz-ppc.c
+# tz-ppc.c
 tz_ppc_reset(void) "TZ PPC: reset"
 tz_ppc_cfg_nonsec(int n, int level) "TZ PPC: cfg_nonsec[%d] = %d"
 tz_ppc_cfg_ap(int n, int level) "TZ PPC: cfg_ap[%d] = %d"
@@ -1634,29 +1732,38 @@ tz_ppc_update_irq(int level) "TZ PPC: setting irq line to %d"
 tz_ppc_read_blocked(int n, uint64_t offset, bool secure, bool user) "TZ PPC: port %d offset 0x%" PRIx64 " read (secure %d user %d) blocked"
 tz_ppc_write_blocked(int n, uint64_t offset, bool secure, bool user) "TZ PPC: port %d offset 0x%" PRIx64 " write (secure %d user %d) blocked"
 
-# hw/misc/iotkit-secctl.c
+# iotkit-secctl.c
 iotkit_secctl_s_read(uint32_t offset, uint64_t data, unsigned size) "IoTKit SecCtl S regs read: offset 0x%x data 0x%" PRIx64 " size %u"
 iotkit_secctl_s_write(uint32_t offset, uint64_t data, unsigned size) "IoTKit SecCtl S regs write: offset 0x%x data 0x%" PRIx64 " size %u"
 iotkit_secctl_ns_read(uint32_t offset, uint64_t data, unsigned size) "IoTKit SecCtl NS regs read: offset 0x%x data 0x%" PRIx64 " size %u"
 iotkit_secctl_ns_write(uint32_t offset, uint64_t data, unsigned size) "IoTKit SecCtl NS regs write: offset 0x%x data 0x%" PRIx64 " size %u"
-iotkit_secctl_reset(void) "IoTKit SecCtl: reset"
 
-# hw/misc/imx6ul_ccm.c
+# imx6ul_ccm.c
 ccm_entry(void) "\n"
 ccm_freq(uint32_t freq) "freq = %d\n"
 ccm_clock_freq(uint32_t clock, uint32_t freq) "(Clock = %d) = %d\n"
 ccm_read_reg(const char *reg_name, uint32_t value) "reg[%s] <= 0x%" PRIx32 "\n"
 ccm_write_reg(const char *reg_name, uint32_t value) "reg[%s] => 0x%" PRIx32 "\n"
 
-# hw/misc/iotkit-sysctl.c
+# iotkit-sysinfo.c
 iotkit_sysinfo_read(uint64_t offset, uint64_t data, unsigned size) "IoTKit SysInfo read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 iotkit_sysinfo_write(uint64_t offset, uint64_t data, unsigned size) "IoTKit SysInfo write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
+
+# iotkit-sysctl.c
 iotkit_sysctl_read(uint64_t offset, uint64_t data, unsigned size) "IoTKit SysCtl read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 iotkit_sysctl_write(uint64_t offset, uint64_t data, unsigned size) "IoTKit SysCtl write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 iotkit_sysctl_reset(void) "IoTKit SysCtl: reset"
+
+# armsse-cpuid.c
+armsse_cpuid_read(uint64_t offset, uint64_t data, unsigned size) "SSE-200 CPU_IDENTITY read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
+armsse_cpuid_write(uint64_t offset, uint64_t data, unsigned size) "SSE-200 CPU_IDENTITY write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
+
+# armsse-mhu.c
+armsse_mhu_read(uint64_t offset, uint64_t data, unsigned size) "SSE-200 MHU read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
+armsse_mhu_write(uint64_t offset, uint64_t data, unsigned size) "SSE-200 MHU write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/misc/macio/cuda.c
+# cuda.c
 cuda_delay_set_sr_int(void) ""
 cuda_data_send(uint8_t data) "send: 0x%02x"
 cuda_data_recv(uint8_t data) "recv: 0x%02x"
@@ -1666,18 +1773,17 @@ cuda_packet_receive_data(int i, const uint8_t data) "[%d] 0x%02x"
 cuda_packet_send(int len) "length %d"
 cuda_packet_send_data(int i, const uint8_t data) "[%d] 0x%02x"
 
-# hw/misc/macio/macio.c
+# macio.c
 macio_timer_write(uint64_t addr, unsigned len, uint64_t val) "write addr 0x%"PRIx64 " len %d val 0x%"PRIx64
 macio_timer_read(uint64_t addr, unsigned len, uint32_t val) "read addr 0x%"PRIx64 " len %d val 0x%"PRIx32
 
-# hw/misc/macio/gpio.c
+# gpio.c
 macio_set_gpio(int gpio, bool state) "setting GPIO %d to %d"
 macio_gpio_irq_assert(int gpio) "asserting GPIO %d"
 macio_gpio_irq_deassert(int gpio) "deasserting GPIO %d"
 macio_gpio_write(uint64_t addr, uint64_t val) "addr: 0x%"PRIx64" value: 0x%"PRIx64
-macio_gpio_read(uint64_t addr, uint64_t val) "addr: 0x%"PRIx64" value: 0x%"PRIx64
 
-# hw/misc/macio/pmu.c
+# pmu.c
 pmu_adb_poll(int olen) "ADB autopoll, olen=%d"
 pmu_one_sec_timer(void) "PMU one sec..."
 pmu_cmd_set_int_mask(int intmask) "Setting PMU int mask to 0x%02x"
@@ -1699,16 +1805,16 @@ pmu_debug_protocol_cmd_send_resp(int pos, int len) "sending byte: %d/%d"
 pmu_debug_protocol_cmd_resp_complete(int ier) "Response send complete. IER=0x%02x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/net/etraxfs_eth.c
+# etraxfs_eth.c
 mdio_phy_read(int regnum, uint16_t value) "read phy_reg:%d value:0x%04x"
 mdio_phy_write(int regnum, uint16_t value) "write phy_reg:%d value:0x%04x"
 mdio_bitbang(bool mdc, bool mdio, int state, uint16_t cnt, unsigned int drive) "bitbang mdc=%u mdio=%u state=%d cnt=%u drv=%d"
 
-# hw/net/lance.c
+# lance.c
 lance_mem_readw(uint64_t addr, uint32_t ret) "addr=0x%"PRIx64"val=0x%04x"
 lance_mem_writew(uint64_t addr, uint32_t val) "addr=0x%"PRIx64"val=0x%04x"
 
-# hw/net/milkymist-minimac2.c
+# milkymist-minimac2.c
 milkymist_minimac2_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_minimac2_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_minimac2_mdio_write(uint8_t phy_addr, uint8_t addr, uint16_t value) "phy_addr 0x%02x addr 0x%02x value 0x%04x"
@@ -1720,20 +1826,20 @@ milkymist_minimac2_raise_irq_rx(void) "Raise IRQ RX"
 milkymist_minimac2_lower_irq_rx(void) "Lower IRQ RX"
 milkymist_minimac2_pulse_irq_tx(void) "Pulse IRQ TX"
 
-# hw/net/mipsnet.c
+# mipsnet.c
 mipsnet_send(uint32_t size) "sending len=%u"
 mipsnet_receive(uint32_t size) "receiving len=%u"
 mipsnet_read(uint64_t addr, uint32_t val) "read addr=0x%" PRIx64 " val=0x%x"
 mipsnet_write(uint64_t addr, uint64_t val) "write addr=0x%" PRIx64 " val=0x%" PRIx64
 mipsnet_irq(uint32_t isr, uint32_t intctl) "set irq to %d (0x%02x)"
 
-# hw/net/ne2000.c
+# ne2000.c
 ne2000_read(uint64_t addr, uint64_t val) "read addr=0x%" PRIx64 " val=0x%" PRIx64
 ne2000_write(uint64_t addr, uint64_t val) "write addr=0x%" PRIx64 " val=0x%" PRIx64
 ne2000_ioport_read(uint64_t addr, uint64_t val) "io read addr=0x%02" PRIx64 " val=0x%02" PRIx64
 ne2000_ioport_write(uint64_t addr, uint64_t val) "io write addr=0x%02" PRIx64 " val=0x%02" PRIx64
 
-# hw/net/opencores_eth.c
+# opencores_eth.c
 open_eth_mii_write(unsigned idx, uint16_t v) "MII[0x%02x] <- 0x%04x"
 open_eth_mii_read(unsigned idx, uint16_t v) "MII[0x%02x] -> 0x%04x"
 open_eth_update_irq(uint32_t v) "IRQ <- 0x%x"
@@ -1747,7 +1853,7 @@ open_eth_reg_write(uint32_t addr, uint32_t v) "MAC[0x%02x] <- 0x%08x"
 open_eth_desc_read(uint32_t addr, uint32_t v) "DESC[0x%04x] -> 0x%08x"
 open_eth_desc_write(uint32_t addr, uint32_t v) "DESC[0x%04x] <- 0x%08x"
 
-# hw/net/pcnet.c
+# pcnet.c
 pcnet_s_reset(void *s) "s=%p"
 pcnet_user_int(void *s) "s=%p"
 pcnet_isr_change(void *s, uint32_t isr, uint32_t isr_old) "s=%p INTA=%d<=%d"
@@ -1755,13 +1861,13 @@ pcnet_init(void *s, uint64_t init_addr) "s=%p init_addr=0x%"PRIx64
 pcnet_rlen_tlen(void *s, uint32_t rlen, uint32_t tlen) "s=%p rlen=%d tlen=%d"
 pcnet_ss32_rdra_tdra(void *s, uint32_t ss32, uint32_t rdra, uint32_t rcvrl, uint32_t tdra, uint32_t xmtrl) "s=%p ss32=%d rdra=0x%08x[%d] tdra=0x%08x[%d]"
 
-# hw/net/pcnet-pci.c
+# pcnet-pci.c
 pcnet_aprom_writeb(void *opaque, uint32_t addr, uint32_t val) "opaque=%p addr=0x%08x val=0x%02x"
 pcnet_aprom_readb(void *opaque, uint32_t addr, uint32_t val) "opaque=%p addr=0x%08x val=0x%02x"
 pcnet_ioport_read(void *opaque, uint64_t addr, unsigned size) "opaque=%p addr=0x%"PRIx64" size=%d"
 pcnet_ioport_write(void *opaque, uint64_t addr, uint64_t data, unsigned size) "opaque=%p addr=0x%"PRIx64" data=0x%"PRIx64" size=%d"
 
-# hw/net/net_rx_pkt.c
+# net_rx_pkt.c
 net_rx_pkt_parsed(bool ip4, bool ip6, bool udp, bool tcp, size_t l3o, size_t l4o, size_t l5o) "RX packet parsed: ip4: %d, ip6: %d, udp: %d, tcp: %d, l3 offset: %zu, l4 offset: %zu, l5 offset: %zu"
 net_rx_pkt_l4_csum_validate_entry(void) "Starting L4 checksum validation"
 net_rx_pkt_l4_csum_validate_not_xxp(void) "Not a TCP/UDP packet"
@@ -1797,10 +1903,10 @@ net_rx_pkt_rss_ip6_ex(void) "Calculating IPv6/EX RSS  hash"
 net_rx_pkt_rss_hash(size_t rss_length, uint32_t rss_hash) "RSS hash for %zu bytes: 0x%X"
 net_rx_pkt_rss_add_chunk(void* ptr, size_t size, size_t input_offset) "Add RSS chunk %p, %zu bytes, RSS input offset %zu bytes"
 
-# hw/net/e1000.c
+# e1000.c
 e1000_receiver_overrun(size_t s, uint32_t rdh, uint32_t rdt) "Receiver overrun: dropped packet of %zu bytes, RDH=%u, RDT=%u"
 
-# hw/net/e1000x_common.c
+# e1000x_common.c
 e1000x_rx_can_recv_disabled(bool link_up, bool rx_enabled, bool pci_master) "link_up: %d, rx_enabled %d, pci_master %d"
 e1000x_vlan_is_vlan_pkt(bool is_vlan_pkt, uint16_t eth_proto, uint16_t vet) "Is VLAN packet: %d, ETH proto: 0x%X, VET: 0x%X"
 e1000x_rx_flt_ucast_match(uint32_t idx, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5) "unicast match[%d]: %02x:%02x:%02x:%02x:%02x:%02x"
@@ -1813,7 +1919,7 @@ e1000x_mac_indicate(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, 
 e1000x_link_negotiation_start(void) "Start link auto negotiation"
 e1000x_link_negotiation_done(void) "Auto negotiation is completed"
 
-# hw/net/e1000e_core.c
+# e1000e_core.c
 e1000e_core_write(uint64_t index, uint32_t size, uint64_t val) "Write to register 0x%"PRIx64", %d byte(s), value: 0x%"PRIx64
 e1000e_core_read(uint64_t index, uint32_t size, uint64_t val) "Read from register 0x%"PRIx64", %d byte(s), value: 0x%"PRIx64
 e1000e_core_mdic_read(uint8_t page, uint32_t addr, uint32_t data) "MDIC READ: PHY[%u][%u] = 0x%x"
@@ -1941,10 +2047,12 @@ e1000e_irq_msix_pending_clearing(uint32_t cause, uint32_t int_cfg, uint32_t vec)
 e1000e_wrn_msix_vec_wrong(uint32_t cause, uint32_t cfg) "Invalid configuration for cause 0x%x: 0x%x"
 e1000e_wrn_msix_invalid(uint32_t cause, uint32_t cfg) "Invalid entry for cause 0x%x: 0x%x"
 
-e1000e_mac_set_permanent(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5) "Set permanent MAC: %02x:%02x:%02x:%02x:%02x:%02x"
 e1000e_mac_set_sw(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5) "Set SW MAC: %02x:%02x:%02x:%02x:%02x:%02x"
 
-# hw/net/e1000e.c
+e1000e_vm_state_running(void) "VM state is running"
+e1000e_vm_state_stopped(void) "VM state is stopped"
+
+# e1000e.c
 e1000e_cb_pci_realize(void) "E1000E PCI realize entry"
 e1000e_cb_pci_uninit(void) "E1000E PCI unit entry"
 e1000e_cb_qdev_reset(void) "E1000E qdev reset entry"
@@ -1965,12 +2073,10 @@ e1000e_msi_init_fail(int32_t res) "Failed to initialize MSI, error %d"
 e1000e_msix_init_fail(int32_t res) "Failed to initialize MSI-X, error %d"
 e1000e_msix_use_vector_fail(uint32_t vec, int32_t res) "Failed to use MSI-X vector %d, error %d"
 
+e1000e_mac_set_permanent(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4, uint8_t b5) "Set permanent MAC: %02x:%02x:%02x:%02x:%02x:%02x"
 e1000e_cfg_support_virtio(bool support) "Virtio header supported: %d"
 
-e1000e_vm_state_running(void) "VM state is running"
-e1000e_vm_state_stopped(void) "VM state is stopped"
-
-# hw/net/spapr_llan.c
+# spapr_llan.c
 spapr_vlan_get_rx_bd_from_pool_found(int pool, int32_t count, uint32_t rx_bufs) "pool=%d count=%"PRId32" rxbufs=%"PRIu32
 spapr_vlan_get_rx_bd_from_page(int buf_ptr, uint64_t bd) "use_buf_ptr=%d bd=0x%016"PRIx64
 spapr_vlan_get_rx_bd_from_page_found(uint32_t use_buf_ptr, uint32_t rx_bufs) "ptr=%"PRIu32" rxbufs=%"PRIu32
@@ -1986,7 +2092,7 @@ spapr_vlan_h_send_logical_lan_rxbufs(uint32_t rx_bufs) "rxbufs = %"PRIu32
 spapr_vlan_h_send_logical_lan_buf_desc(uint64_t buf) "   buf desc: 0x%"PRIx64
 spapr_vlan_h_send_logical_lan_total(int nbufs, unsigned total_len) "%d buffers, total length 0x%x"
 
-# hw/net/sungem.c
+# sungem.c
 sungem_tx_checksum(uint16_t start, uint16_t off) "TX checksumming from byte %d, inserting at %d"
 sungem_tx_checksum_oob(void) "TX checksum out of packet bounds"
 sungem_tx_unfinished(void) "TX packet started without finishing the previous one"
@@ -2030,7 +2136,7 @@ sungem_mmio_mif_read(uint64_t addr, uint64_t val) "MMIO mif read from 0x%"PRIx64
 sungem_mmio_pcs_write(uint64_t addr, uint64_t val) "MMIO pcs write to 0x%"PRIx64" val=0x%"PRIx64
 sungem_mmio_pcs_read(uint64_t addr, uint64_t val) "MMIO pcs read from 0x%"PRIx64" val=0x%"PRIx64
 
-# hw/net/sunhme.c
+# sunhme.c
 sunhme_seb_write(uint64_t addr, uint64_t value) "addr 0x%"PRIx64" value 0x%"PRIx64
 sunhme_seb_read(uint64_t addr, uint64_t value) "addr 0x%"PRIx64" value 0x%"PRIx64
 sunhme_etx_write(uint64_t addr, uint64_t value) "addr 0x%"PRIx64" value 0x%"PRIx64
@@ -2058,34 +2164,40 @@ sunhme_rx_filter_reject(void) "rejecting incoming frame"
 sunhme_rx_filter_accept(void) "accepting incoming frame"
 sunhme_rx_desc(uint32_t addr, int offset, uint32_t status, int len, int cr, int nr) "addr 0x%"PRIx32"(+0x%x) status 0x%"PRIx32 " len %d (ring %d/%d)"
 sunhme_rx_xsum_calc(uint16_t xsum) "calculated incoming xsum as 0x%x"
+
+# virtio-net.c
+virtio_net_announce_notify(void) ""
+virtio_net_announce_timer(int round) "%d"
+virtio_net_handle_announce(int round) "%d"
+virtio_net_post_load_device(void)
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/nvram/ds1225y.c
+# ds1225y.c
 nvram_read(uint32_t addr, uint32_t ret) "read addr %d: 0x%02x"
 nvram_write(uint32_t addr, uint32_t old, uint32_t val) "write addr %d: 0x%02x -> 0x%02x"
 
-# hw/nvram/fw_cfg.c
+# fw_cfg.c
 fw_cfg_select(void *s, uint16_t key, int ret) "%p key %d = %d"
 fw_cfg_read(void *s, uint64_t ret) "%p = 0x%"PRIx64
 fw_cfg_add_file(void *s, int index, char *name, size_t len) "%p #%d: %s (%zd bytes)"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/pci/pci.c
+# pci.c
 pci_update_mappings_del(void *d, uint32_t bus, uint32_t slot, uint32_t func, int bar, uint64_t addr, uint64_t size) "d=%p %02x:%02x.%x %d,0x%"PRIx64"+0x%"PRIx64
 pci_update_mappings_add(void *d, uint32_t bus, uint32_t slot, uint32_t func, int bar, uint64_t addr, uint64_t size) "d=%p %02x:%02x.%x %d,0x%"PRIx64"+0x%"PRIx64
 
-# hw/pci/pci_host.c
+# pci_host.c
 pci_cfg_read(const char *dev, unsigned devid, unsigned fnid, unsigned offs, unsigned val) "%s %02u:%u @0x%x -> 0x%x"
 pci_cfg_write(const char *dev, unsigned devid, unsigned fnid, unsigned offs, unsigned val) "%s %02u:%u @0x%x <- 0x%x"
 
-# hw/pci/msix.c
+# msix.c
 msix_write_config(char *name, bool enabled, bool masked) "dev %s enabled %d masked %d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/pci-host/grackle.c
+# grackle.c
 grackle_set_irq(int irq_num, int level) "set_irq num %d level %d"
 
-# hw/pci-host/sabre.c
+# sabre.c
 sabre_set_request(int irq_num) "request irq %d"
 sabre_clear_request(int irq_num) "clear request irq %d"
 sabre_config_write(uint64_t addr, uint64_t val) "addr 0x%"PRIx64" val 0x%"PRIx64
@@ -2095,7 +2207,7 @@ sabre_pci_config_read(uint64_t addr, uint64_t val) "addr 0x%"PRIx64" val 0x%"PRI
 sabre_pci_set_irq(int irq_num, int level) "set irq_in %d level %d"
 sabre_pci_set_obio_irq(int irq_num, int level) "set irq %d level %d"
 
-# hw/pci-host/uninorth.c
+# uninorth.c
 unin_set_irq(int irq_num, int level) "setting INT %d = %d"
 unin_get_config_reg(uint32_t reg, uint32_t addr, uint32_t retval) "converted config space accessor 0x%"PRIx32 "/0x%"PRIx32 " -> 0x%"PRIx32
 unin_data_write(uint64_t addr, unsigned len, uint64_t val) "write addr 0x%"PRIx64 " len %d val 0x%"PRIx64
@@ -2104,7 +2216,7 @@ unin_write(uint64_t addr, uint64_t value) "addr=0x%" PRIx64 " val=0x%"PRIx64
 unin_read(uint64_t addr, uint64_t value) "addr=0x%" PRIx64 " val=0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/ppc/spapr_pci.c
+# spapr_pci.c
 spapr_pci_msi(const char *msg, uint32_t ca) "%s (cfg=0x%x)"
 spapr_pci_msi_setup(const char *name, unsigned vector, uint64_t addr) "dev\"%s\" vector %u, addr=0x%"PRIx64
 spapr_pci_rtas_ibm_change_msi(unsigned cfg, unsigned func, unsigned req, unsigned first) "cfgaddr 0x%x func %u, requested %u, first irq %u"
@@ -2113,21 +2225,23 @@ spapr_pci_msi_write(uint64_t addr, uint64_t data, uint32_t dt_irq) "@0x%"PRIx64"
 spapr_pci_lsi_set(const char *busname, int pin, uint32_t irq) "%s PIN%d IRQ %u"
 spapr_pci_msi_retry(unsigned config_addr, unsigned req_num, unsigned max_irqs) "Guest device at 0x%x asked %u, have only %u"
 
-# hw/ppc/spapr.c
+# spapr.c
 spapr_cas_failed(unsigned long n) "DT diff buffer is too small: %ld bytes"
 spapr_cas_continue(unsigned long n) "Copy changes to the guest: %ld bytes"
-spapr_irq_alloc(int irq) "irq %d"
-spapr_irq_alloc_block(int first, int num, bool lsi, int align) "first irq %d, %d irqs, lsi=%d, alignnum %d"
+
+# spapr_irq.c
 spapr_irq_free(int src, int irq, int num) "Source#%d, first irq %d, %d irqs"
 spapr_irq_free_warn(int src, int irq) "Source#%d, irq %d is already free"
 
-# hw/ppc/spapr_hcall.c
-spapr_cas_pvr_try(uint32_t pvr) "0x%x"
+# spapr_hcall.c
 spapr_cas_pvr(uint32_t cur_pvr, bool explicit_match, uint32_t new_pvr) "current=0x%x, explicit_match=%u, new=0x%x"
 spapr_h_resize_hpt_prepare(uint64_t flags, uint64_t shift) "flags=0x%"PRIx64", shift=%"PRIu64
 spapr_h_resize_hpt_commit(uint64_t flags, uint64_t shift) "flags=0x%"PRIx64", shift=%"PRIu64
+spapr_update_dt(unsigned cb) "New blob %u bytes"
+spapr_update_dt_failed_size(unsigned cbold, unsigned cbnew, unsigned magic) "Old blob %u bytes, new blob %u bytes, magic 0x%x"
+spapr_update_dt_failed_check(unsigned cbold, unsigned cbnew, unsigned magic) "Old blob %u bytes, new blob %u bytes, magic 0x%x"
 
-# hw/ppc/spapr_iommu.c
+# spapr_iommu.c
 spapr_iommu_put(uint64_t liobn, uint64_t ioba, uint64_t tce, uint64_t ret) "liobn=0x%"PRIx64" ioba=0x%"PRIx64" tce=0x%"PRIx64" ret=%"PRId64
 spapr_iommu_get(uint64_t liobn, uint64_t ioba, uint64_t ret, uint64_t tce) "liobn=0x%"PRIx64" ioba=0x%"PRIx64" ret=%"PRId64" tce=0x%"PRIx64
 spapr_iommu_indirect(uint64_t liobn, uint64_t ioba, uint64_t tce, uint64_t iobaN, uint64_t tceN, uint64_t ret) "liobn=0x%"PRIx64" ioba=0x%"PRIx64" tcelist=0x%"PRIx64" iobaN=0x%"PRIx64" tceN=0x%"PRIx64" ret=%"PRId64
@@ -2140,86 +2254,121 @@ spapr_iommu_xlate(uint64_t liobn, uint64_t ioba, uint64_t tce, unsigned perm, un
 spapr_iommu_new_table(uint64_t liobn, void *table, int fd) "liobn=0x%"PRIx64" table=%p fd=%d"
 spapr_iommu_pre_save(uint64_t liobn, uint32_t nb, uint64_t offs, uint32_t ps) "liobn=%"PRIx64" %"PRIx32" bus_offset=0x%"PRIx64" ps=%"PRIu32
 spapr_iommu_post_load(uint64_t liobn, uint32_t pre_nb, uint32_t post_nb, uint64_t offs, uint32_t ps) "liobn=%"PRIx64" %"PRIx32" => 0x%"PRIx32" bus_offset=0x%"PRIx64" ps=%"PRIu32
+
+# spapr_rtas_ddw.c
 spapr_iommu_ddw_query(uint64_t buid, uint32_t cfgaddr, unsigned wa, uint64_t win_size, uint32_t pgmask) "buid=0x%"PRIx64" addr=0x%"PRIx32", %u windows available, max window size=0x%"PRIx64", mask=0x%"PRIx32
 spapr_iommu_ddw_create(uint64_t buid, uint32_t cfgaddr, uint64_t pg_size, uint64_t req_size, uint64_t start, uint32_t liobn) "buid=0x%"PRIx64" addr=0x%"PRIx32", page size=0x%"PRIx64", requested=0x%"PRIx64", start addr=0x%"PRIx64", liobn=0x%"PRIx32
 spapr_iommu_ddw_remove(uint32_t liobn) "liobn=0x%"PRIx32
 spapr_iommu_ddw_reset(uint64_t buid, uint32_t cfgaddr) "buid=0x%"PRIx64" addr=0x%"PRIx32
 
-# hw/ppc/spapr_drc.c
+# spapr_drc.c
 spapr_drc_set_isolation_state(uint32_t index, int state) "drc: 0x%"PRIx32", state: 0x%"PRIx32
 spapr_drc_set_isolation_state_finalizing(uint32_t index) "drc: 0x%"PRIx32
-spapr_drc_set_isolation_state_deferring(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_set_dr_indicator(uint32_t index, int state) "drc: 0x%"PRIx32", state: 0x%x"
 spapr_drc_set_allocation_state(uint32_t index, int state) "drc: 0x%"PRIx32", state: 0x%x"
 spapr_drc_set_allocation_state_finalizing(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_set_configured(uint32_t index) "drc: 0x%"PRIx32
-spapr_drc_set_configured_skipping(uint32_t index) "drc: 0x%"PRIx32", isolated device"
 spapr_drc_attach(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_detach(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_awaiting_quiesce(uint32_t index) "drc: 0x%"PRIx32
-spapr_drc_awaiting_allocation(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_reset(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_realize(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_realize_child(uint32_t index, char *childname) "drc: 0x%"PRIx32", child name: %s"
 spapr_drc_realize_complete(uint32_t index) "drc: 0x%"PRIx32
 spapr_drc_unrealize(uint32_t index) "drc: 0x%"PRIx32
 
-# hw/ppc/spapr_ovec.c
+# spapr_ovec.c
 spapr_ovec_parse_vector(int vector, int byte, uint16_t vec_len, uint8_t entry) "read guest vector %2d, byte %3d / %3d: 0x%.2x"
 spapr_ovec_populate_dt(int byte, uint16_t vec_len, uint8_t entry) "encoding guest vector byte %3d / %3d: 0x%.2x"
 
-# hw/ppc/spapr_rtas.c
+# spapr_drc.c
 spapr_rtas_get_sensor_state_not_supported(uint32_t index, uint32_t type) "sensor index: 0x%"PRIx32", type: %"PRIu32
 spapr_rtas_get_sensor_state_invalid(uint32_t index) "sensor index: 0x%"PRIx32
 spapr_rtas_ibm_configure_connector_invalid(uint32_t index) "DRC index: 0x%"PRIx32
-spapr_rtas_ibm_configure_connector_missing_fdt(uint32_t index) "DRC index: 0x%"PRIx32
 
-# hw/ppc/spapr_vio.c
+# spapr_vio.c
 spapr_vio_h_reg_crq(uint64_t reg, uint64_t queue_addr, uint64_t queue_len) "CRQ for dev 0x%" PRIx64 " registered at 0x%" PRIx64 "/0x%" PRIx64
 spapr_vio_free_crq(uint32_t reg) "CRQ for dev 0x%" PRIx32 " freed"
 
-# hw/ppc/ppc.c
+# ppc.c
 ppc_tb_adjust(uint64_t offs1, uint64_t offs2, int64_t diff, int64_t seconds) "adjusted from 0x%"PRIx64" to 0x%"PRIx64", diff %"PRId64" (%"PRId64"s)"
 
-# hw/ppc/prep.c
+# prep.c
 prep_io_800_writeb(uint32_t addr, uint32_t val) "0x%08" PRIx32 " => 0x%02" PRIx32
 prep_io_800_readb(uint32_t addr, uint32_t retval) "0x%08" PRIx32 " <= 0x%02" PRIx32
 
-# hw/ppc/prep_systemio.c
+# prep_systemio.c
 prep_systemio_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 prep_systemio_write(uint32_t addr, uint32_t val) "write addr=0x%x val=0x%x"
 
-# hw/ppc/rs6000_mc.c
+# rs6000_mc.c
 rs6000mc_id_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 rs6000mc_presence_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 rs6000mc_size_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 rs6000mc_size_write(uint32_t addr, uint32_t val) "write addr=0x%x val=0x%x"
 rs6000mc_parity_read(uint32_t addr, uint32_t val) "read addr=0x%x val=0x%x"
 
-# hw/ppc/ppc4xx_pci.c
+# ppc4xx_pci.c
 ppc4xx_pci_map_irq(int32_t devfn, int irq_num, int slot) "devfn 0x%x irq %d -> %d"
 ppc4xx_pci_set_irq(int irq_num) "PCI irq %d"
 
-# hw/ppc/ppc440_pcix.c
+# ppc440_pcix.c
 ppc440_pcix_map_irq(int32_t devfn, int irq_num, int slot) "devfn 0x%x irq %d -> %d"
 ppc440_pcix_set_irq(int irq_num) "PCI irq %d"
 ppc440_pcix_update_pim(int idx, uint64_t size, uint64_t la) "Added window %d of size=0x%" PRIx64 " to CPU=0x%" PRIx64
 ppc440_pcix_update_pom(int idx, uint32_t size, uint64_t la, uint64_t pcia) "Added window %d of size=0x%x from CPU=0x%" PRIx64 " to PCI=0x%" PRIx64
 ppc440_pcix_reg_read(uint64_t addr, uint32_t val) "addr 0x%" PRIx64 " = 0x%" PRIx32
-ppc440_pcix_reg_write(uint64_t addr, uint64_t val) "addr 0x%" PRIx64 " = 0x%" PRIx64
-# See docs/tracing.txt for syntax documentation.
-
-#hw/rdma/rdma_backend.c
-create_ah_cache_hit(uint64_t subnet, uint64_t net_id) "subnet = 0x%"PRIx64" net_id = 0x%"PRIx64
-create_ah_cache_miss(uint64_t subnet, uint64_t net_id) "subnet = 0x%"PRIx64" net_id = 0x%"PRIx64
-# See docs/tracing.txt for syntax documentation.
-
-# hw/rdma/vmw/pvrdma_main.c
-pvrdma_regs_read(uint64_t addr, uint64_t val) "regs[0x%"PRIx64"] = 0x%"PRIx64
-pvrdma_regs_write(uint64_t addr, uint64_t val) "regs[0x%"PRIx64"] = 0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/s390x/css.c
+# rdma_backend.c
+rdma_check_dev_attr(const char *name, int max_bk, int max_fe) "%s: be=%d, fe=%d"
+rdma_create_ah_cache_hit(uint64_t subnet, uint64_t if_id) "subnet=0x%"PRIx64",if_id=0x%"PRIx64
+rdma_create_ah_cache_miss(uint64_t subnet, uint64_t if_id) "subnet=0x%"PRIx64",if_id=0x%"PRIx64
+rdma_poll_cq(int ne, void *ibcq) "Got %d completion(s) from cq %p"
+rdmacm_mux(const char *title, int msg_type, int op_code) "%s: msg_type=%d, op_code=%d"
+rdmacm_mux_check_op_status(int msg_type, int op_code, int err_code) "resp: msg_type=%d, op_code=%d, err_code=%d"
+rdma_mad_message(const char *title, int len, char *data) "mad %s (%d): %s"
+rdma_backend_rc_qp_state_init(uint32_t qpn) "RC QP 0x%x switch to INIT"
+rdma_backend_ud_qp_state_init(uint32_t qpn, uint32_t qkey) "UD QP 0x%x switch to INIT, qkey=0x%x"
+rdma_backend_rc_qp_state_rtr(uint32_t qpn, uint64_t subnet, uint64_t ifid, uint8_t sgid_idx, uint32_t dqpn, uint32_t rq_psn) "RC QP 0x%x switch to RTR, subnet = 0x%"PRIx64", ifid = 0x%"PRIx64 ", sgid_idx=%d, dqpn=0x%x, rq_psn=0x%x"
+rdma_backend_ud_qp_state_rtr(uint32_t qpn, uint32_t qkey) "UD QP 0x%x switch to RTR, qkey=0x%x"
+rdma_backend_rc_qp_state_rts(uint32_t qpn, uint32_t sq_psn) "RC QP 0x%x switch to RTS, sq_psn=0x%x, "
+rdma_backend_ud_qp_state_rts(uint32_t qpn, uint32_t sq_psn, uint32_t qkey) "UD QP 0x%x switch to RTS, sq_psn=0x%x, qkey=0x%x"
+rdma_backend_get_gid_index(uint64_t subnet, uint64_t ifid, int gid_idx) "subnet=0x%"PRIx64", ifid=0x%"PRIx64 ", gid_idx=%d"
+rdma_backend_gid_change(const char *op, uint64_t subnet, uint64_t ifid) "%s subnet=0x%"PRIx64", ifid=0x%"PRIx64
+
+# rdma_rm.c
+rdma_res_tbl_get(char *name, uint32_t handle) "tbl %s, handle %d"
+rdma_res_tbl_alloc(char *name, uint32_t handle) "tbl %s, handle %d"
+rdma_res_tbl_dealloc(char *name, uint32_t handle) "tbl %s, handle %d"
+rdma_rm_alloc_mr(uint32_t mr_handle, void *host_virt, uint64_t guest_start, uint64_t guest_length, int access_flags) "mr_handle=%d, host_virt=%p, guest_start=0x%"PRIx64", length=%" PRId64", access_flags=0x%x"
+rdma_rm_dealloc_mr(uint32_t mr_handle, uint64_t guest_start) "mr_handle=%d, guest_start=0x%"PRIx64
+rdma_rm_alloc_qp(uint32_t rm_qpn, uint32_t backend_qpn, uint8_t qp_type) "rm_qpn=%d, backend_qpn=0x%x, qp_type=%d"
+rdma_rm_modify_qp(uint32_t qpn, uint32_t attr_mask, int qp_state, uint8_t sgid_idx) "qpn=0x%x, attr_mask=0x%x, qp_state=%d, sgid_idx=%d"
+
+# rdma_utils.c
+rdma_pci_dma_map(uint64_t addr, void *vaddr, uint64_t len) "0x%"PRIx64" -> %p (len=%" PRId64")"
+rdma_pci_dma_unmap(void *vaddr) "%p"
+# See docs/devel/tracing.txt for syntax documentation.
+
+# pvrdma_main.c
+pvrdma_regs_read(uint64_t addr, uint64_t val) "pvrdma.regs[0x%"PRIx64"]=0x%"PRIx64
+pvrdma_regs_write(uint64_t addr, uint64_t val, const char *reg_name, const char *val_name) "pvrdma.regs[0x%"PRIx64"]=0x%"PRIx64" (%s %s)"
+pvrdma_uar_write(uint64_t addr, uint64_t val, const char *reg_name, const char *val_name, int val1, int val2) "uar[0x%"PRIx64"]=0x%"PRIx64" (cls=%s, op=%s, obj=%d, val=%d)"
+
+# pvrdma_cmd.c
+pvrdma_map_to_pdir_host_virt(void *vfirst, void *vremaped) "mremap %p -> %p"
+pvrdma_map_to_pdir_next_page(int page_idx, void *vnext, void *vremaped) "mremap [%d] %p -> %p"
+pvrdma_exec_cmd(int cmd, int err) "cmd=%d, err=%d"
+
+# pvrdma_dev_ring.c
+pvrdma_ring_next_elem_read_no_data(char *ring_name) "pvrdma_ring %s is empty"
+
+# pvrdma_qp_ops.c
+pvrdma_post_cqe(uint32_t cq_handle, int notify, uint64_t wr_id, uint64_t qpn, uint32_t op_code, uint32_t status, uint32_t byte_len, uint32_t src_qp, uint32_t wc_flags, uint32_t vendor_err) "cq_handle=%d, notify=%d, wr_id=0x%"PRIx64", qpn=0x%"PRIx64", opcode=%d, status=%d, byte_len=%d, src_qp=%d, wc_flags=%d, vendor_err=%d"
+# See docs/devel/tracing.txt for syntax documentation.
+
+# css.c
 css_enable_facility(const char *facility) "CSS: enable %s"
 css_crw(uint8_t rsc, uint8_t erc, uint16_t rsid, const char *chained) "CSS: queueing crw: rsc=0x%x, erc=0x%x, rsid=0x%x %s"
 css_chpid_add(uint8_t cssid, uint8_t chpid, uint8_t type) "CSS: add chpid %x.%02x (type 0x%02x)"
@@ -2229,13 +2378,13 @@ css_io_interrupt(int cssid, int ssid, int schid, uint32_t intparm, uint8_t isc, 
 css_adapter_interrupt(uint8_t isc) "CSS: adapter I/O interrupt (isc 0x%x)"
 css_do_sic(uint16_t mode, uint8_t isc) "CSS: set interruption mode 0x%x on isc 0x%x"
 
-# hw/s390x/virtio-ccw.c
+# virtio-ccw.c
 virtio_ccw_interpret_ccw(int cssid, int ssid, int schid, int cmd_code) "VIRTIO-CCW: %x.%x.%04x: interpret command 0x%x"
 virtio_ccw_new_device(int cssid, int ssid, int schid, int devno, const char *devno_mode) "VIRTIO-CCW: add subchannel %x.%x.%04x, devno 0x%04x (%s)"
 virtio_ccw_set_ind(uint64_t ind_loc, uint8_t ind_old, uint8_t ind_new) "VIRTIO-CCW: indicator at %" PRIu64 ": 0x%x->0x%x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/scsi/scsi-bus.c
+# scsi-bus.c
 scsi_req_alloc(int target, int lun, int tag) "target %d lun %d tag %d"
 scsi_req_cancel(int target, int lun, int tag) "target %d lun %d tag %d"
 scsi_req_data(int target, int lun, int tag, int len) "target %d lun %d tag %d len %d"
@@ -2253,7 +2402,7 @@ scsi_inquiry(int target, int lun, int tag, int cdb1, int cdb2) "target %d lun %d
 scsi_test_unit_ready(int target, int lun, int tag) "target %d lun %d tag %d"
 scsi_request_sense(int target, int lun, int tag) "target %d lun %d tag %d"
 
-# hw/scsi/mptsas.c
+# mptsas.c
 mptsas_command_complete(void *dev, uint32_t ctx, uint32_t status, uint32_t resid) "dev %p context 0x%08x status 0x%x resid %d"
 mptsas_diag_read(void *dev, uint32_t addr, uint32_t val) "dev %p addr 0x%08x value 0x%08x"
 mptsas_diag_write(void *dev, uint32_t addr, uint32_t val) "dev %p addr 0x%08x value 0x%08x"
@@ -2271,11 +2420,11 @@ mptsas_sgl_overflow(void *dev, uint32_t ctx, uint64_t req, uint64_t found) "dev 
 mptsas_unhandled_cmd(void *dev, uint32_t ctx, uint8_t msg_cmd) "dev %p context 0x%08x: Unhandled cmd 0x%x"
 mptsas_unhandled_doorbell_cmd(void *dev, int cmd) "dev %p value 0x%08x"
 
-# hw/scsi/mptconfig.c
+# mptconfig.c
 mptsas_config_sas_device(void *dev, int address, int port, int phy_handle, int dev_handle, int page) "dev %p address %d (port %d, handles: phy %d dev %d) page %d"
 mptsas_config_sas_phy(void *dev, int address, int port, int phy_handle, int dev_handle, int page) "dev %p address %d (port %d, handles: phy %d dev %d) page %d"
 
-# hw/scsi/megasas.c
+# megasas.c
 megasas_init_firmware(uint64_t pa) "pa 0x%" PRIx64 " "
 megasas_init_queue(uint64_t queue_pa, int queue_len, uint64_t head, uint64_t tail, uint32_t flags) "queue at 0x%" PRIx64 " len %d head 0x%" PRIx64 " tail 0x%" PRIx64 " flags 0x%x"
 megasas_initq_map_failed(int frame) "scmd %d: failed to map queue"
@@ -2353,7 +2502,7 @@ megasas_mmio_invalid_readl(unsigned long addr) "addr 0x%lx"
 megasas_mmio_writel(const char *reg, uint32_t val) "reg %s: 0x%x"
 megasas_mmio_invalid_writel(uint32_t addr, uint32_t val) "addr 0x%x: 0x%x"
 
-# hw/scsi/vmw_pvscsi.c
+# vmw_pvscsi.c
 pvscsi_ring_init_data(uint32_t txr_len_log2, uint32_t rxr_len_log2) "TX/RX rings logarithms set to %d/%d"
 pvscsi_ring_init_msg(uint32_t len_log2) "MSG ring logarithm set to %d"
 pvscsi_ring_flush_cmp(uint64_t filled_cmp_ptr) "new production counter of completion ring is 0x%"PRIx64
@@ -2388,7 +2537,7 @@ pvscsi_state(const char* state) "starting %s ..."
 pvscsi_tx_rings_ppn(const char* label, uint64_t ppn) "%s page: 0x%"PRIx64
 pvscsi_tx_rings_num_pages(const char* label, uint32_t num) "Number of %s pages: %u"
 
-# hw/scsi/esp.c
+# esp.c
 esp_error_fifo_overrun(void) "FIFO overrun"
 esp_error_unhandled_command(uint32_t val) "unhandled command (0x%2.2x)"
 esp_error_invalid_write(uint32_t val, uint32_t addr) "invalid write of 0x%02x at [0x%x]"
@@ -2402,6 +2551,7 @@ esp_handle_satn_stop(uint32_t cmdlen) "cmdlen %d"
 esp_write_response(uint32_t status) "Transfer status (status=%d)"
 esp_do_dma(uint32_t cmdlen, uint32_t len) "command len %d + %d"
 esp_command_complete(void) "SCSI Command complete"
+esp_command_complete_deferred(void) "SCSI Command complete deferred"
 esp_command_complete_unexpected(void) "SCSI command completed unexpectedly"
 esp_command_complete_fail(void) "Command failed"
 esp_transfer_data(uint32_t dma_left, int32_t ti_size) "transfer %d/%d"
@@ -2424,7 +2574,7 @@ esp_mem_writeb_cmd_selatns(uint32_t val) "Select with ATN & stop (0x%2.2x)"
 esp_mem_writeb_cmd_ensel(uint32_t val) "Enable selection (0x%2.2x)"
 esp_mem_writeb_cmd_dissel(uint32_t val) "Disable selection (0x%2.2x)"
 
-# hw/scsi/esp-pci.c
+# esp-pci.c
 esp_pci_error_invalid_dma_direction(void) "invalid DMA transfer direction"
 esp_pci_error_invalid_read(uint32_t reg) "read access outside bounds (reg 0x%x)"
 esp_pci_error_invalid_write(uint32_t reg) "write access outside bounds (reg 0x%x)"
@@ -2438,7 +2588,7 @@ esp_pci_dma_start(uint32_t val) "START (0x%.8x)"
 esp_pci_sbac_read(uint32_t reg) "sbac: 0x%8.8x"
 esp_pci_sbac_write(uint32_t reg, uint32_t val) "sbac: 0x%8.8x -> 0x%8.8x"
 
-# hw/scsi/spapr_vscsi.c
+# spapr_vscsi.c
 spapr_vscsi_send_rsp(uint8_t status, int32_t res_in, int32_t res_out) "status: 0x%x, res_in: %"PRId32", res_out: %"PRId32
 spapr_vscsi_fetch_desc_no_data(void) "no data descriptor"
 spapr_vscsi_fetch_desc_direct(void) "direct segment"
@@ -2465,7 +2615,7 @@ spapr_vscsi_queue_cmd_no_drive(uint64_t lun) "Command for lun 0x%08" PRIx64 " wi
 spapr_vscsi_queue_cmd(uint32_t qtag, unsigned cdb, const char *cmd, int lun, int ret) "Queued command tag 0x%"PRIx32" CMD 0x%x=%s LUN %d ret: %d"
 spapr_vscsi_do_crq(unsigned c0, unsigned c1) "crq: %02x %02x ..."
 
-# hw/scsi/lsi53c895a.c
+# lsi53c895a.c
 lsi_reset(void) "Reset"
 lsi_update_irq(int level, uint8_t dstat, uint8_t sist1, uint8_t sist0) "Update IRQ level %d dstat 0x%02x sist 0x%02x0x%02x"
 lsi_update_irq_disconnected(void) "Handled IRQs & disconnected, looking for pending processes"
@@ -2502,7 +2652,7 @@ lsi_memcpy(uint32_t dest, uint32_t src, int count) "memcpy dest 0x%"PRIx32" src 
 lsi_wait_reselect(void) "Wait Reselect"
 lsi_execute_script(uint32_t dsp, uint32_t insn, uint32_t addr) "SCRIPTS dsp=0x%"PRIx32" opcode 0x%"PRIx32" arg 0x%"PRIx32
 lsi_execute_script_blockmove_delayed(void) "Delayed select timeout"
-lsi_execute_script_blockmove_badphase(uint8_t phase, uint8_t expected) "Wrong phase got %d expected %d"
+lsi_execute_script_blockmove_badphase(const char *phase, const char *expected) "Wrong phase got %s expected %s"
 lsi_execute_script_io_alreadyreselected(void) "Already reselected, jumping to alternative address"
 lsi_execute_script_io_selected(uint8_t id, const char *atn) "Selected target %d%s"
 lsi_execute_script_io_disconnect(void) "Wait Disconnect"
@@ -2512,8 +2662,8 @@ lsi_execute_script_io_opcode(const char *opcode, int reg, const char *opname, ui
 lsi_execute_script_tc_nop(void) "NOP"
 lsi_execute_script_tc_delayedselect_timeout(void) "Delayed select timeout"
 lsi_execute_script_tc_compc(int result) "Compare carry %d"
-lsi_execute_script_tc_compp(uint8_t phase, int op, uint8_t insn_phase) "Compare phase %d %c= %d"
-lsi_execute_script_tc_compd(uint32_t sfbr, uint8_t mask, int op, int result) "Compare data 0x%"PRIx32" & 0x%x %c= 0x%x"
+lsi_execute_script_tc_compp(const char *phase, char op, const char *insn_phase) "Compare phase %s %c= %s"
+lsi_execute_script_tc_compd(uint32_t sfbr, uint8_t mask, char op, int result) "Compare data 0x%"PRIx32" & 0x%x %c= 0x%x"
 lsi_execute_script_tc_jump(uint32_t addr) "Jump to 0x%"PRIx32
 lsi_execute_script_tc_call(uint32_t addr) "Call 0x%"PRIx32
 lsi_execute_script_tc_return(uint32_t addr) "Return to 0x%"PRIx32
@@ -2526,15 +2676,55 @@ lsi_execute_script_stop(void) "SCRIPTS execution stopped"
 lsi_awoken(void) "Woken by SIGP"
 lsi_reg_read(const char *name, int offset, uint8_t ret) "Read reg %s 0x%x = 0x%02x"
 lsi_reg_write(const char *name, int offset, uint8_t val) "Write reg %s 0x%x = 0x%02x"
+
+# scsi-disk.c
+scsi_disk_check_condition(uint32_t tag, uint8_t key, uint8_t asc, uint8_t ascq) "Command complete tag=0x%x sense=%d/%d/%d"
+scsi_disk_read_complete(uint32_t tag, size_t size) "Data ready tag=0x%x len=%zd"
+scsi_disk_read_data_count(uint32_t sector_count) "Read sector_count=%d"
+scsi_disk_read_data_invalid(void) "Data transfer direction invalid"
+scsi_disk_write_complete_noio(uint32_t tag, size_t size) "Write complete tag=0x%x more=%zd"
+scsi_disk_write_data_invalid(void) "Data transfer direction invalid"
+scsi_disk_emulate_vpd_page_00(size_t xfer) "Inquiry EVPD[Supported pages] buffer size %zd"
+scsi_disk_emulate_vpd_page_80_not_supported(void) "Inquiry (EVPD[Serial number] not supported"
+scsi_disk_emulate_vpd_page_80(size_t xfer) "Inquiry EVPD[Serial number] buffer size %zd"
+scsi_disk_emulate_vpd_page_83(size_t xfer) "Inquiry EVPD[Device identification] buffer size %zd"
+scsi_disk_emulate_vpd_page_b0_not_supported(void) "Inquiry (EVPD[Block limits] not supported for CDROM"
+scsi_disk_emulate_mode_sense(int cmd, int page, size_t xfer, int control) "Mode Sense(%d) (page %d, xfer %zd, page_control %d)"
+scsi_disk_emulate_read_toc(int start_track, int format, int msf) "Read TOC (track %d format %d msf %d)"
+scsi_disk_emulate_read_data(int buflen) "Read buf_len=%d"
+scsi_disk_emulate_write_data(int buflen) "Write buf_len=%d"
+scsi_disk_emulate_command_SAI_16(void) "SAI READ CAPACITY(16)"
+scsi_disk_emulate_command_SAI_unsupported(void) "Unsupported Service Action In"
+scsi_disk_emulate_command_SEEK_10(uint64_t lba) "Seek(10) (sector %" PRId64 ")"
+scsi_disk_emulate_command_MODE_SELECT(size_t xfer) "Mode Select(6) (len %zd)"
+scsi_disk_emulate_command_MODE_SELECT_10(size_t xfer) "Mode Select(10) (len %zd)"
+scsi_disk_emulate_command_UNMAP(size_t xfer) "Unmap (len %zd)"
+scsi_disk_emulate_command_VERIFY(int bytchk) "Verify (bytchk %d)"
+scsi_disk_emulate_command_WRITE_SAME(int cmd, size_t xfer) "WRITE SAME %d (len %zd)"
+scsi_disk_emulate_command_UNKNOWN(int cmd, const char *name) "Unknown SCSI command (0x%2.2x=%s)"
+scsi_disk_dma_command_READ(uint64_t lba, uint32_t len) "Read (sector %" PRId64 ", count %u)"
+scsi_disk_dma_command_WRITE(const char *cmd, uint64_t lba, int len) "Write %s(sector %" PRId64 ", count %u)"
+scsi_disk_new_request(uint32_t lun, uint32_t tag, const char *line) "Command: lun=%d tag=0x%x data=%s"
+
+# scsi-generic.c
+scsi_generic_command_complete_noio(void *req, uint32_t tag, int statuc) "Command complete %p tag=0x%x status=%d"
+scsi_generic_read_complete(uint32_t tag, int len) "Data ready tag=0x%x len=%d"
+scsi_generic_read_data(uint32_t tag) "scsi_read_data tag=0x%x"
+scsi_generic_write_complete(int ret) "scsi_write_complete() ret = %d"
+scsi_generic_write_complete_blocksize(int blocksize) "block size %d"
+scsi_generic_write_data(uint32_t tag) "scsi_write_data tag=0x%x"
+scsi_generic_send_command(const char *line) "Command: data=%s"
+scsi_generic_realize_type(int type) "device type %d"
+scsi_generic_realize_blocksize(int blocksize) "block size %d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/sd/bcm2835_sdhost.c
+# bcm2835_sdhost.c
 bcm2835_sdhost_read(uint64_t offset, uint64_t data, unsigned size) "offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 bcm2835_sdhost_write(uint64_t offset, uint64_t data, unsigned size) "offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 bcm2835_sdhost_edm_change(const char *why, uint32_t edm) "(%s) EDM now 0x%x"
 bcm2835_sdhost_update_irq(uint32_t irq) "IRQ bits 0x%x\n"
 
-# hw/sd/core.c
+# core.c
 sdbus_command(const char *bus_name, uint8_t cmd, uint32_t arg) "@%s CMD%02d arg 0x%08x"
 sdbus_read(const char *bus_name, uint8_t value) "@%s value 0x%02x"
 sdbus_write(const char *bus_name, uint8_t value) "@%s value 0x%02x"
@@ -2542,7 +2732,7 @@ sdbus_set_voltage(const char *bus_name, uint16_t millivolts) "@%s %u (mV)"
 sdbus_get_dat_lines(const char *bus_name, uint8_t dat_lines) "@%s dat_lines: %u"
 sdbus_get_cmd_line(const char *bus_name, bool cmd_line) "@%s cmd_line: %u"
 
-# hw/sd/sdhci.c
+# sdhci.c
 sdhci_set_inserted(const char *level) "card state changed: %s"
 sdhci_send_command(uint8_t cmd, uint32_t arg) "CMD%02u ARG[0x%08x]"
 sdhci_error(const char *msg) "%s"
@@ -2557,13 +2747,12 @@ sdhci_read_dataport(uint16_t data_count) "all %u bytes of data have been read fr
 sdhci_write_dataport(uint16_t data_count) "write buffer filled with %u bytes of data"
 sdhci_capareg(const char *desc, uint16_t val) "%s: %u"
 
-# hw/sd/sd.c
+# sd.c
 sdcard_normal_command(const char *proto, const char *cmd_desc, uint8_t cmd, uint32_t arg, const char *state) "%s %20s/ CMD%02d arg 0x%08x (state %s)"
 sdcard_app_command(const char *proto, const char *acmd_desc, uint8_t acmd, uint32_t arg, const char *state) "%s %23s/ACMD%02d arg 0x%08x (state %s)"
 sdcard_response(const char *rspdesc, int rsplen) "%s (sz:%d)"
 sdcard_powerup(void) ""
 sdcard_inquiry_cmd41(void) ""
-sdcard_set_enable(bool current_state, bool new_state) "%u -> %u"
 sdcard_reset(void) ""
 sdcard_set_blocklen(uint16_t length) "0x%03x"
 sdcard_inserted(bool readonly) "read_only: %u"
@@ -2577,22 +2766,22 @@ sdcard_write_data(const char *proto, const char *cmd_desc, uint8_t cmd, uint8_t 
 sdcard_read_data(const char *proto, const char *cmd_desc, uint8_t cmd, int length) "%s %20s/ CMD%02d len %d"
 sdcard_set_voltage(uint16_t millivolts) "%u mV"
 
-# hw/sd/milkymist-memcard.c
+# milkymist-memcard.c
 milkymist_memcard_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_memcard_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 
-# hw/sd/pxa2xx_mmci.c
+# pxa2xx_mmci.c
 pxa2xx_mmci_read(uint8_t size, uint32_t addr, uint32_t value) "size %d addr 0x%02x value 0x%08x"
 pxa2xx_mmci_write(uint8_t size, uint32_t addr, uint32_t value) "size %d addr 0x%02x value 0x%08x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/sparc/sun4m.c
+# sun4m.c
 sun4m_cpu_interrupt(unsigned int level) "Set CPU IRQ %d"
 sun4m_cpu_reset_interrupt(unsigned int level) "Reset CPU IRQ %d"
 sun4m_cpu_set_irq_raise(int level) "Raise CPU IRQ %d"
 sun4m_cpu_set_irq_lower(int level) "Lower CPU IRQ %d"
 
-# hw/sparc/sun4m_iommu.c
+# sun4m_iommu.c
 sun4m_iommu_mem_readl(uint64_t addr, uint32_t ret) "read reg[0x%"PRIx64"] = 0x%x"
 sun4m_iommu_mem_writel(uint64_t addr, uint32_t val) "write reg[0x%"PRIx64"] = 0x%x"
 sun4m_iommu_mem_writel_ctrl(uint64_t iostart) "iostart = 0x%"PRIx64
@@ -2602,20 +2791,20 @@ sun4m_iommu_page_get_flags(uint64_t pa, uint64_t iopte, uint32_t ret) "get flags
 sun4m_iommu_translate_pa(uint64_t addr, uint64_t pa, uint32_t iopte) "xlate dva 0x%"PRIx64" => pa 0x%"PRIx64" iopte = 0x%x"
 sun4m_iommu_bad_addr(uint64_t addr) "bad addr 0x%"PRIx64
 
-# hw/sparc/leon3.c
+# leon3.c
 leon3_set_irq(int intno) "Set CPU IRQ %d"
 leon3_reset_irq(int intno) "Reset CPU IRQ %d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/sparc64/sun4u.c
+# sun4u.c
 ebus_isa_irq_handler(int n, int level) "Set ISA IRQ %d level %d"
 
-# hw/sparc64/sun4u_iommu.c
+# sun4u_iommu.c
 sun4u_iommu_mem_read(uint64_t addr, uint64_t val, int size) "addr: 0x%"PRIx64" val: 0x%"PRIx64" size: %d"
 sun4u_iommu_mem_write(uint64_t addr, uint64_t val, int size) "addr: 0x%"PRIx64" val: 0x%"PRIx64" size: %d"
 sun4u_iommu_translate(uint64_t addr, uint64_t trans_addr, uint64_t tte) "xlate 0x%"PRIx64" => pa 0x%"PRIx64" tte: 0x%"PRIx64
 
-# hw/sparc64/sparc64.c
+# sparc64.c
 sparc64_cpu_check_irqs_reset_irq(int intno) "Reset CPU IRQ (current interrupt 0x%x)"
 sparc64_cpu_check_irqs_noset_irq(uint32_t tl, uint32_t tt, int intno) "Not setting CPU IRQ: TL=%d current 0x%x >= pending 0x%x"
 sparc64_cpu_check_irqs_set_irq(unsigned int i, int old, int new) "Set CPU IRQ %d old=0x%x new=0x%x"
@@ -2634,7 +2823,7 @@ sparc64_cpu_tick_set_limit(const char *name, uint64_t real_limit, const char *di
 sparc64_cpu_tick_set_limit_zero(const char *name) "%s set_limit limit=ZERO - not starting timer"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/timer/slavio_timer.c
+# slavio_timer.c
 slavio_timer_get_out(uint64_t limit, uint32_t counthigh, uint32_t count) "limit 0x%"PRIx64" count 0x%x0x%08x"
 slavio_timer_irq(uint32_t counthigh, uint32_t count) "callback: count 0x%x0x%08x"
 slavio_timer_mem_readl_invalid(uint64_t addr) "invalid read address 0x%"PRIx64
@@ -2649,7 +2838,7 @@ slavio_timer_mem_writel_mode_counter(unsigned int timer_index) "processor %d cha
 slavio_timer_mem_writel_mode_invalid(void) "not system timer"
 slavio_timer_mem_writel_invalid(uint64_t addr) "invalid write address 0x%"PRIx64
 
-# hw/timer/grlib_gptimer.c
+# grlib_gptimer.c
 grlib_gptimer_enable(int id, uint32_t count) "timer:%d set count 0x%x and run"
 grlib_gptimer_disabled(int id, uint32_t config) "timer:%d Timer disable config 0x%x"
 grlib_gptimer_restart(int id, uint32_t reload) "timer:%d reload val: 0x%x"
@@ -2658,13 +2847,13 @@ grlib_gptimer_hit(int id) "timer:%d HIT"
 grlib_gptimer_readl(int id, uint64_t addr, uint32_t val) "timer:%d addr 0x%"PRIx64" 0x%x"
 grlib_gptimer_writel(int id, uint64_t addr, uint32_t val) "timer:%d addr 0x%"PRIx64" 0x%x"
 
-# hw/timer/lm32_timer.c
+# lm32_timer.c
 lm32_timer_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 lm32_timer_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 lm32_timer_hit(void) "timer hit"
 lm32_timer_irq_state(int level) "irq state %d"
 
-# hw/timer/milkymist-sysctl.c
+# milkymist-sysctl.c
 milkymist_sysctl_memory_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_sysctl_memory_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
 milkymist_sysctl_icap_write(uint32_t value) "value 0x%08x"
@@ -2675,7 +2864,7 @@ milkymist_sysctl_stop_timer1(void) "Stop timer1"
 milkymist_sysctl_pulse_irq_timer0(void) "Pulse IRQ Timer0"
 milkymist_sysctl_pulse_irq_timer1(void) "Pulse IRQ Timer1"
 
-# hw/timer/aspeed_timer.c
+# aspeed_timer.c
 aspeed_timer_ctrl_enable(uint8_t i, bool enable) "Timer %" PRIu8 ": %d"
 aspeed_timer_ctrl_external_clock(uint8_t i, bool enable) "Timer %" PRIu8 ": %d"
 aspeed_timer_ctrl_overflow_interrupt(uint8_t i, bool enable) "Timer %" PRIu8 ": %d"
@@ -2684,46 +2873,57 @@ aspeed_timer_set_ctrl2(uint32_t value) "Value: 0x%" PRIx32
 aspeed_timer_set_value(int timer, int reg, uint32_t value) "Timer %d register %d: 0x%" PRIx32
 aspeed_timer_read(uint64_t offset, unsigned size, uint64_t value) "From 0x%" PRIx64 ": of size %u: 0x%" PRIx64
 
-# hw/timer/armv7m_systick.c
+# armv7m_systick.c
 systick_reload(void) "systick reload"
 systick_timer_tick(void) "systick reload"
 systick_read(uint64_t addr, uint32_t value, unsigned size) "systick read addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
 systick_write(uint64_t addr, uint32_t value, unsigned size) "systick write addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
 
-# hw/timer/cmsdk_apb_timer.c
+# cmsdk-apb-timer.c
 cmsdk_apb_timer_read(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB timer read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_timer_write(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB timer write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_timer_reset(void) "CMSDK APB timer: reset"
 
-# hw/timer/cmsdk_apb_dualtimer.c
+# cmsdk-apb-dualtimer.c
 cmsdk_apb_dualtimer_read(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB dualtimer read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_dualtimer_write(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB dualtimer write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_dualtimer_reset(void) "CMSDK APB dualtimer: reset"
 
-# hw/timer/sun4v-rtc.c
+# sun4v-rtc.c
 sun4v_rtc_read(uint64_t addr, uint64_t value) "read: addr 0x%" PRIx64 " value 0x%" PRIx64
 sun4v_rtc_write(uint64_t addr, uint64_t value) "write: addr 0x%" PRIx64 " value 0x%" PRIx64
 
-# hw/timer/xlnx-zynqmp-rtc.c
+# xlnx-zynqmp-rtc.c
 xlnx_zynqmp_rtc_gettime(int year, int month, int day, int hour, int min, int sec) "Get time from host: %d-%d-%d %2d:%02d:%02d"
+
+# nrf51_timer.c
+nrf51_timer_read(uint64_t addr, uint32_t value, unsigned size) "read addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
+nrf51_timer_write(uint64_t addr, uint32_t value, unsigned size) "write addr 0x%" PRIx64 " data 0x%" PRIx32 " size %u"
+
+# pl031.c
+pl031_irq_state(int level) "irq state %d"
+pl031_read(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
+pl031_write(uint32_t addr, uint32_t value) "addr 0x%08x value 0x%08x"
+pl031_alarm_raised(void) "alarm raised"
+pl031_set_alarm(uint32_t ticks) "alarm set for %u ticks"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/tpm/tpm_crb.c
+# tpm_crb.c
 tpm_crb_mmio_read(uint64_t addr, unsigned size, uint32_t val) "CRB read 0x" TARGET_FMT_plx " len:%u val: 0x%" PRIx32
 tpm_crb_mmio_write(uint64_t addr, unsigned size, uint32_t val) "CRB write 0x" TARGET_FMT_plx " len:%u val: 0x%" PRIx32
 
-# hw/tpm/tpm_passthrough.c
+# tpm_passthrough.c
 tpm_passthrough_handle_request(void *cmd) "processing command %p"
 tpm_passthrough_reset(void) "reset"
 
-# hw/tpm/tpm_util.c
+# tpm_util.c
 tpm_util_get_buffer_size_hdr_len(uint32_t len, size_t expected) "tpm_resp->hdr.len = %u, expected = %zu"
 tpm_util_get_buffer_size_len(uint32_t len, size_t expected) "tpm_resp->len = %u, expected = %zu"
 tpm_util_get_buffer_size_hdr_len2(uint32_t len, size_t expected) "tpm2_resp->hdr.len = %u, expected = %zu"
 tpm_util_get_buffer_size_len2(uint32_t len, size_t expected) "tpm2_resp->len = %u, expected = %zu"
 tpm_util_get_buffer_size(size_t len) "buffersize of device: %zu"
 
-# hw/tpm/tpm_emulator.c
+# tpm_emulator.c
 tpm_emulator_set_locality(uint8_t locty) "setting locality to %d"
 tpm_emulator_handle_request(void) "processing TPM command"
 tpm_emulator_probe_caps(uint64_t caps) "capabilities: 0x%"PRIx64
@@ -2743,7 +2943,8 @@ tpm_emulator_set_state_blobs_done(void) "Done setting state blobs"
 tpm_emulator_pre_save(void) ""
 tpm_emulator_inst_init(void) ""
 
-# hw/tpm/tpm_tis.c
+# tpm_tis.c
+tpm_tis_show_buffer(const char *direction, size_t len, const char *buf) "direction: %s len: %zu\nbuf: %s"
 tpm_tis_raise_irq(uint32_t irqmask) "Raising IRQ for flag 0x%08x"
 tpm_tis_new_active_locality(uint8_t locty) "Active locality is now %d"
 tpm_tis_abort(uint8_t locty) "New active locality is %d"
@@ -2759,19 +2960,22 @@ tpm_tis_mmio_write_init_abort(void) "Initiating abort"
 tpm_tis_mmio_write_lowering_irq(void) "Lowering IRQ"
 tpm_tis_mmio_write_data2send(uint32_t value, unsigned size) "Data to send to TPM: 0x%08x (size=%d)"
 tpm_tis_pre_save(uint8_t locty, uint32_t rw_offset) "locty: %d, rw_offset = %u"
+
+# tpm_ppi.c
+tpm_ppi_memset(uint8_t *ptr, size_t size) "memset: %p %zu"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/usb/core.c
+# core.c
 usb_packet_state_change(int bus, const char *port, int ep, void *p, const char *o, const char *n) "bus %d, port %s, ep %d, packet %p, state %s -> %s"
 usb_packet_state_fault(int bus, const char *port, int ep, void *p, const char *o, const char *n) "bus %d, port %s, ep %d, packet %p, state %s, expected %s"
 
-# hw/usb/bus.c
+# bus.c
 usb_port_claim(int bus, const char *port) "bus %d, port %s"
 usb_port_attach(int bus, const char *port, const char *devspeed, const char *portspeed) "bus %d, port %s, devspeed %s, portspeed %s"
 usb_port_detach(int bus, const char *port) "bus %d, port %s"
 usb_port_release(int bus, const char *port) "bus %d, port %s"
 
-# hw/usb/hcd-ohci.c
+# hcd-ohci.c
 usb_ohci_iso_td_read_failed(uint32_t addr) "ISO_TD read error at 0x%x"
 usb_ohci_iso_td_head(uint32_t head, uint32_t tail, uint32_t flags, uint32_t bp, uint32_t next, uint32_t be, uint32_t framenum, uint32_t startframe, uint32_t framecount, int rel_frame_num) "ISO_TD ED head 0x%.8x tailp 0x%.8x\n0x%.8x 0x%.8x 0x%.8x 0x%.8x\nframe_number 0x%.8x starting_frame 0x%.8x\nframe_count  0x%.8x relative %d"
 usb_ohci_iso_td_head_offset(uint32_t o0, uint32_t o1, uint32_t o2, uint32_t o3, uint32_t o4, uint32_t o5, uint32_t o6, uint32_t o7) "0x%.8x 0x%.8x 0x%.8x 0x%.8x 0x%.8x 0x%.8x 0x%.8x 0x%.8x"
@@ -2828,7 +3032,7 @@ usb_ohci_init_time(int64_t frametime, int64_t bittime) "usb_bit_time=%" PRId64 "
 usb_ohci_die(void) ""
 usb_ohci_async_complete(void) ""
 
-# hw/usb/hcd-ehci.c
+# hcd-ehci.c
 usb_ehci_reset(void) "=== RESET ==="
 usb_ehci_unrealize(void) "=== UNREALIZE ==="
 usb_ehci_opreg_read(uint32_t addr, const char *str, uint32_t val) "rd mmio 0x%04x [%s] = 0x%x"
@@ -2861,7 +3065,7 @@ usb_ehci_doorbell_ring(void) ""
 usb_ehci_doorbell_ack(void) ""
 usb_ehci_dma_error(void) ""
 
-# hw/usb/hcd-uhci.c
+# hcd-uhci.c
 usb_uhci_reset(void) "=== RESET ==="
 usb_uhci_exit(void) "=== EXIT ==="
 usb_uhci_schedule_start(void) ""
@@ -2891,7 +3095,7 @@ usb_uhci_td_nextqh(uint32_t qh, uint32_t td) "qh 0x%x, td 0x%x"
 usb_uhci_td_async(uint32_t qh, uint32_t td) "qh 0x%x, td 0x%x"
 usb_uhci_td_complete(uint32_t qh, uint32_t td) "qh 0x%x, td 0x%x"
 
-# hw/usb/hcd-xhci.c
+# hcd-xhci.c
 usb_xhci_reset(void) "=== RESET ==="
 usb_xhci_exit(void) "=== EXIT ==="
 usb_xhci_run(void) ""
@@ -2937,7 +3141,7 @@ usb_xhci_xfer_error(void *xfer, uint32_t ret) "%p: ret %d"
 usb_xhci_unimplemented(const char *item, int nr) "%s (0x%x)"
 usb_xhci_enforced_limit(const char *item) "%s"
 
-# hw/usb/desc.c
+# desc.c
 usb_desc_device(int addr, int len, int ret) "dev %d query device, len %d, ret %d"
 usb_desc_device_qualifier(int addr, int len, int ret) "dev %d query device qualifier, len %d, ret %d"
 usb_desc_config(int addr, int index, int len, int ret) "dev %d query config %d, len %d, ret %d"
@@ -2951,7 +3155,7 @@ usb_set_interface(int addr, int iface, int alt, int ret) "dev %d, interface %d, 
 usb_clear_device_feature(int addr, int feature, int ret) "dev %d, feature %d, ret %d"
 usb_set_device_feature(int addr, int feature, int ret) "dev %d, feature %d, ret %d"
 
-# hw/usb/dev-hub.c
+# dev-hub.c
 usb_hub_reset(int addr) "dev %d"
 usb_hub_control(int addr, int request, int value, int index, int length) "dev %d, req 0x%x, value %d, index %d, langth %d"
 usb_hub_get_port_status(int addr, int nr, int status, int changed) "dev %d, port %d, status 0x%x, changed 0x%x"
@@ -2961,7 +3165,7 @@ usb_hub_attach(int addr, int nr) "dev %d, port %d"
 usb_hub_detach(int addr, int nr) "dev %d, port %d"
 usb_hub_status_report(int addr, int status) "dev %d, status 0x%x"
 
-# hw/usb/dev-uas.c
+# dev-uas.c
 usb_uas_reset(int addr) "dev %d"
 usb_uas_command(int addr, uint16_t tag, int lun, uint32_t lun64_1, uint32_t lun64_2) "dev %d, tag 0x%x, lun %d, lun64 0x%08x-0x%08x"
 usb_uas_response(int addr, uint16_t tag, uint8_t code) "dev %d, tag 0x%x, code 0x%x"
@@ -2975,7 +3179,7 @@ usb_uas_tmf_abort_task(int addr, uint16_t tag, uint16_t task_tag) "dev %d, tag 0
 usb_uas_tmf_logical_unit_reset(int addr, uint16_t tag, int lun) "dev %d, tag 0x%x, lun %d"
 usb_uas_tmf_unsupported(int addr, uint16_t tag, uint32_t function) "dev %d, tag 0x%x, function 0x%x"
 
-# hw/usb/dev-mtp.c
+# dev-mtp.c
 usb_mtp_reset(int addr) "dev %d"
 usb_mtp_command(int dev, uint16_t code, uint32_t trans, uint32_t arg0, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) "dev %d, code 0x%x, trans 0x%x, args 0x%x, 0x%x, 0x%x, 0x%x, 0x%x"
 usb_mtp_success(int dev, uint32_t trans, uint32_t arg0, uint32_t arg1) "dev %d, trans 0x%x, args 0x%x, 0x%x"
@@ -2998,9 +3202,9 @@ usb_mtp_op_unknown(int dev, uint32_t code) "dev %d, command code 0x%x"
 usb_mtp_object_alloc(int dev, uint32_t handle, const char *path) "dev %d, handle 0x%x, path %s"
 usb_mtp_object_free(int dev, uint32_t handle, const char *path) "dev %d, handle 0x%x, path %s"
 usb_mtp_add_child(int dev, uint32_t handle, const char *path) "dev %d, handle 0x%x, path %s"
-usb_mtp_inotify_event(int dev, const char *path, uint32_t mask, const char *s) "dev %d, path %s mask 0x%x event %s"
+usb_mtp_file_monitor_event(int dev, const char *path, const char *s) "dev %d, path %s event %s"
 
-# hw/usb/host-libusb.c
+# host-libusb.c
 usb_host_open_started(int bus, int addr) "dev %d:%d"
 usb_host_open_success(int bus, int addr) "dev %d:%d"
 usb_host_open_failure(int bus, int addr) "dev %d:%d"
@@ -3029,7 +3233,7 @@ usb_host_parse_endpoint(int bus, int addr, int ep, const char *dir, const char *
 usb_host_parse_error(int bus, int addr, const char *errmsg) "dev %d:%d, msg %s"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/vfio/pci.c
+# pci.c
 vfio_intx_interrupt(const char *name, char line) " (%s) Pin %c"
 vfio_intx_eoi(const char *name) " (%s) EOI"
 vfio_intx_enable_kvm(const char *name) " (%s) KVM INTx accel enabled"
@@ -3045,7 +3249,6 @@ vfio_msix_pba_disable(const char *name) " (%s)"
 vfio_msix_pba_enable(const char *name) " (%s)"
 vfio_msix_disable(const char *name) " (%s)"
 vfio_msix_fixup(const char *name, int bar, uint64_t start, uint64_t end) " (%s) MSI-X region %d mmap fixup [0x%"PRIx64" - 0x%"PRIx64"]"
-vfio_msix_relo_cost(const char *name, int bar, uint64_t cost) " (%s) BAR %d cost 0x%"PRIx64""
 vfio_msix_relo(const char *name, int bar, uint64_t offset) " (%s) BAR %d offset 0x%"PRIx64""
 vfio_msi_enable(const char *name, int nr_vectors) " (%s) Enabled %d MSI vectors"
 vfio_msi_disable(const char *name) " (%s)"
@@ -3066,7 +3269,7 @@ vfio_pci_hot_reset_has_dep_devices(const char *name) "%s: hot reset dependent de
 vfio_pci_hot_reset_dep_devices(int domain, int bus, int slot, int function, int group_id) "\t%04x:%02x:%02x.%x group %d"
 vfio_pci_hot_reset_result(const char *name, const char *result) "%s hot reset: %s"
 vfio_populate_device_config(const char *name, unsigned long size, unsigned long offset, unsigned long flags) "Device %s config:\n  size: 0x%lx, offset: 0x%lx, flags: 0x%lx"
-vfio_populate_device_get_irq_info_failure(void) "VFIO_DEVICE_GET_IRQ_INFO failure: %m"
+vfio_populate_device_get_irq_info_failure(const char *errstr) "VFIO_DEVICE_GET_IRQ_INFO failure: %s"
 vfio_realize(const char *name, int group_id) " (%s) group %d"
 vfio_mdev(const char *name, bool is_mdev) " (%s) is_mdev %d"
 vfio_add_ext_cap_dropped(const char *name, uint16_t cap, uint16_t offset) "%s 0x%x@0x%x"
@@ -3078,7 +3281,7 @@ vfio_pci_emulated_device_id(const char *name, uint16_t val) "%s 0x%04x"
 vfio_pci_emulated_sub_vendor_id(const char *name, uint16_t val) "%s 0x%04x"
 vfio_pci_emulated_sub_device_id(const char *name, uint16_t val) "%s 0x%04x"
 
-# hw/vfio/pci-quirks.c
+# pci-quirks.c
 vfio_quirk_rom_blacklisted(const char *name, uint16_t vid, uint16_t did) "%s %04x:%04x"
 vfio_quirk_generic_window_address_write(const char *name, const char * region_name, uint64_t data) "%s %s 0x%"PRIx64
 vfio_quirk_generic_window_data_read(const char *name, const char * region_name, uint64_t data) "%s %s 0x%"PRIx64
@@ -3116,11 +3319,12 @@ vfio_pci_igd_opregion_enabled(const char *name) "%s"
 vfio_pci_igd_host_bridge_enabled(const char *name) "%s"
 vfio_pci_igd_lpc_bridge_enabled(const char *name) "%s"
 
-# hw/vfio/common.c
+# common.c
 vfio_region_write(const char *name, int index, uint64_t addr, uint64_t data, unsigned size) " (%s:region%d+0x%"PRIx64", 0x%"PRIx64 ", %d)"
 vfio_region_read(char *name, int index, uint64_t addr, unsigned size, uint64_t data) " (%s:region%d+0x%"PRIx64", %d) = 0x%"PRIx64
 vfio_iommu_map_notify(const char *op, uint64_t iova_start, uint64_t iova_end) "iommu %s @ 0x%"PRIx64" - 0x%"PRIx64
 vfio_listener_region_add_skip(uint64_t start, uint64_t end) "SKIPPING region_add 0x%"PRIx64" - 0x%"PRIx64
+vfio_spapr_group_attach(int groupfd, int tablefd) "Attached groupfd %d to liobn fd %d"
 vfio_listener_region_add_iommu(uint64_t start, uint64_t end) "region_add [iommu] 0x%"PRIx64" - 0x%"PRIx64
 vfio_listener_region_add_ram(uint64_t iova_start, uint64_t iova_end, void *vaddr) "region_add [ram] 0x%"PRIx64" - 0x%"PRIx64" [%p]"
 vfio_listener_region_add_no_dma_map(const char *name, uint64_t iova, uint64_t size, uint64_t page_size) "Region \"%s\" 0x%"PRIx64" size=0x%"PRIx64" is not aligned to 0x%"PRIx64" and cannot be mapped for DMA"
@@ -3139,8 +3343,9 @@ vfio_region_mmaps_set_enabled(const char *name, bool enabled) "Region %s mmaps e
 vfio_region_sparse_mmap_header(const char *name, int index, int nr_areas) "Device %s region %d: %d sparse mmap entries"
 vfio_region_sparse_mmap_entry(int i, unsigned long start, unsigned long end) "sparse entry %d [0x%lx - 0x%lx]"
 vfio_get_dev_region(const char *name, int index, uint32_t type, uint32_t subtype) "%s index %d, %08x/%0x8"
+vfio_dma_unmap_overflow_workaround(void) ""
 
-# hw/vfio/platform.c
+# platform.c
 vfio_platform_base_device_init(char *name, int groupid) "%s belongs to group #%d"
 vfio_platform_realize(char *name, char *compat) "vfio device %s, compat = %s"
 vfio_platform_eoi(int pin, int fd) "EOI IRQ pin %d (fd=%d)"
@@ -3152,17 +3357,23 @@ vfio_intp_interrupt_set_pending(int index) "irq %d is set PENDING"
 vfio_platform_start_level_irqfd_injection(int index, int fd, int resamplefd) "IRQ index=%d, fd = %d, resamplefd = %d"
 vfio_platform_start_edge_irqfd_injection(int index, int fd) "IRQ index=%d, fd = %d"
 
-# hw/vfio/spapr.c
+# spapr.c
 vfio_prereg_listener_region_add_skip(uint64_t start, uint64_t end) "0x%"PRIx64" - 0x%"PRIx64
 vfio_prereg_listener_region_del_skip(uint64_t start, uint64_t end) "0x%"PRIx64" - 0x%"PRIx64
 vfio_prereg_register(uint64_t va, uint64_t size, int ret) "va=0x%"PRIx64" size=0x%"PRIx64" ret=%d"
 vfio_prereg_unregister(uint64_t va, uint64_t size, int ret) "va=0x%"PRIx64" size=0x%"PRIx64" ret=%d"
-vfio_spapr_create_window(int ps, uint64_t ws, uint64_t off) "pageshift=0x%x winsize=0x%"PRIx64" offset=0x%"PRIx64
+vfio_spapr_create_window(int ps, unsigned int levels, uint64_t ws, uint64_t off) "pageshift=0x%x levels=%u winsize=0x%"PRIx64" offset=0x%"PRIx64
 vfio_spapr_remove_window(uint64_t off) "offset=0x%"PRIx64
-vfio_spapr_group_attach(int groupfd, int tablefd) "Attached groupfd %d to liobn fd %d"
+
+# display.c
+vfio_display_edid_available(void) ""
+vfio_display_edid_link_up(void) ""
+vfio_display_edid_link_down(void) ""
+vfio_display_edid_update(uint32_t prefx, uint32_t prefy) "%ux%u"
+vfio_display_edid_write_error(void) ""
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/virtio/vhost.c
+# vhost.c
 vhost_commit(bool started, bool changed) "Started: %d Changed: %d"
 vhost_region_add_section(const char *name, uint64_t gpa, uint64_t size, uint64_t host) "%s: 0x%"PRIx64"+0x%"PRIx64" @ 0x%"PRIx64
 vhost_region_add_section_merge(const char *name, uint64_t new_size, uint64_t gpa, uint64_t owr) "%s: size: 0x%"PRIx64 " gpa: 0x%"PRIx64 " owr: 0x%"PRIx64
@@ -3170,7 +3381,7 @@ vhost_region_add_section_aligned(const char *name, uint64_t gpa, uint64_t size, 
 vhost_section(const char *name, int r) "%s:%d"
 vhost_iotlb_miss(void *dev, int step) "%p step %d"
 
-# hw/virtio/vhost-user.c
+# vhost-user.c
 vhost_user_postcopy_end_entry(void) ""
 vhost_user_postcopy_end_exit(void) ""
 vhost_user_postcopy_fault_handler(const char *name, uint64_t fault_address, int nregions) "%s: @0x%"PRIx64" nregions:%d"
@@ -3183,7 +3394,7 @@ vhost_user_postcopy_waker(const char *rb, uint64_t rb_offset) "%s + 0x%"PRIx64
 vhost_user_postcopy_waker_found(uint64_t client_addr) "0x%"PRIx64
 vhost_user_postcopy_waker_nomatch(const char *rb, uint64_t rb_offset) "%s + 0x%"PRIx64
 
-# hw/virtio/virtio.c
+# virtio.c
 virtqueue_alloc_element(void *elem, size_t sz, unsigned in_num, unsigned out_num) "elem %p size %zd in_num %u out_num %u"
 virtqueue_fill(void *vq, const void *elem, unsigned int len, unsigned int idx) "vq %p elem %p len %u idx %u"
 virtqueue_flush(void *vq, unsigned int count) "vq %p count %u"
@@ -3193,7 +3404,7 @@ virtio_notify_irqfd(void *vdev, void *vq) "vdev %p vq %p"
 virtio_notify(void *vdev, void *vq) "vdev %p vq %p"
 virtio_set_status(void *vdev, uint8_t val) "vdev %p val %u"
 
-# hw/virtio/virtio-rng.c
+# virtio-rng.c
 virtio_rng_guest_not_ready(void *rng) "rng %p: guest not ready"
 virtio_rng_cpu_is_stopped(void *rng, int size) "rng %p: cpu is stopped, dropping %d bytes"
 virtio_rng_popped(void *rng) "rng %p: elem popped"
@@ -3201,7 +3412,7 @@ virtio_rng_pushed(void *rng, size_t len) "rng %p: %zd bytes pushed"
 virtio_rng_request(void *rng, size_t size, unsigned quota) "rng %p: %zd bytes requested, %u bytes quota left"
 virtio_rng_vm_state_change(void *rng, int running, int state) "rng %p: state change to running %d state %d"
 
-# hw/virtio/virtio-balloon.c
+# virtio-balloon.c
 #
 virtio_balloon_bad_addr(uint64_t gpa) "0x%"PRIx64
 virtio_balloon_handle_output(const char *name, uint64_t gpa) "section name: %s gpa: 0x%"PRIx64
@@ -3210,13 +3421,13 @@ virtio_balloon_set_config(uint32_t actual, uint32_t oldactual) "actual: %d oldac
 virtio_balloon_to_target(uint64_t target, uint32_t num_pages) "balloon target: 0x%"PRIx64" num_pages: %d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# hw/char/cmsdk_apb_watchdog.c
+# cmsdk-apb-watchdog.c
 cmsdk_apb_watchdog_read(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB watchdog read: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_watchdog_write(uint64_t offset, uint64_t data, unsigned size) "CMSDK APB watchdog write: offset 0x%" PRIx64 " data 0x%" PRIx64 " size %u"
 cmsdk_apb_watchdog_reset(void) "CMSDK APB watchdog: reset"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# include/hw/xen/xen_common.h
+# ../../include/hw/xen/xen_common.h
 xen_default_ioreq_server(void) ""
 xen_ioreq_server_create(uint32_t id) "id: %u"
 xen_ioreq_server_destroy(uint32_t id) "id: %u"
@@ -3228,17 +3439,52 @@ xen_unmap_portio_range(uint32_t id, uint64_t start_addr, uint64_t end_addr) "id:
 xen_map_pcidev(uint32_t id, uint8_t bus, uint8_t dev, uint8_t func) "id: %u bdf: %02x.%02x.%02x"
 xen_unmap_pcidev(uint32_t id, uint8_t bus, uint8_t dev, uint8_t func) "id: %u bdf: %02x.%02x.%02x"
 xen_domid_restrict(int err) "err: %u"
+
+# xen-bus.c
+xen_bus_realize(void) ""
+xen_bus_unrealize(void) ""
+xen_bus_enumerate(void) ""
+xen_bus_type_enumerate(const char *type) "type: %s"
+xen_bus_backend_create(const char *type, const char *path) "type: %s path: %s"
+xen_bus_add_watch(const char *node, const char *key, char *token) "node: %s key: %s token: %s"
+xen_bus_remove_watch(const char *node, const char *key, char *token) "node: %s key: %s token: %s"
+xen_bus_watch(const char *token) "token: %s"
+xen_device_realize(const char *type, char *name) "type: %s name: %s"
+xen_device_unrealize(const char *type, char *name) "type: %s name: %s"
+xen_device_backend_state(const char *type, char *name, const char *state) "type: %s name: %s -> %s"
+xen_device_backend_online(const char *type, char *name, bool online) "type: %s name: %s -> %u"
+xen_device_backend_changed(const char *type, char *name) "type: %s name: %s"
+xen_device_frontend_state(const char *type, char *name, const char *state) "type: %s name: %s -> %s"
+xen_device_frontend_changed(const char *type, char *name) "type: %s name: %s"
+xen_device_unplug(const char *type, char *name) "type: %s name: %s"
+
+# xen-bus-helper.c
+xs_node_create(const char *node) "%s"
+xs_node_destroy(const char *node) "%s"
+xs_node_vprintf(char *path, char *value) "%s %s"
+xs_node_vscanf(char *path, char *value) "%s %s"
+xs_node_watch(char *path) "%s"
+xs_node_unwatch(char *path) "%s"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# io/task.c
+# nrf51_gpio.c
+nrf51_gpio_read(uint64_t offset, uint64_t r) "offset 0x%" PRIx64 " value 0x%" PRIx64
+nrf51_gpio_write(uint64_t offset, uint64_t value) "offset 0x%" PRIx64 " value 0x%" PRIx64
+nrf51_gpio_set(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
+nrf51_gpio_update_output_irq(int64_t line, int64_t value) "line %" PRIi64 " value %" PRIi64
+# See docs/devel/tracing.txt for syntax documentation.
+
+# task.c
 qio_task_new(void *task, void *source, void *func, void *opaque) "Task new task=%p source=%p func=%p opaque=%p"
 qio_task_complete(void *task) "Task complete task=%p"
 qio_task_thread_start(void *task, void *worker, void *opaque) "Task thread start task=%p worker=%p opaque=%p"
 qio_task_thread_run(void *task) "Task thread run task=%p"
 qio_task_thread_exit(void *task) "Task thread exit task=%p"
 qio_task_thread_result(void *task) "Task thread result task=%p"
+qio_task_thread_source_attach(void *task, void *source) "Task thread source attach task=%p source=%p"
+qio_task_thread_source_cancel(void *task, void *source) "Task thread source cancel task=%p source=%p"
 
-# io/channel-socket.c
+# channel-socket.c
 qio_channel_socket_new(void *ioc) "Socket new ioc=%p"
 qio_channel_socket_new_fd(void *ioc, int fd) "Socket new ioc=%p fd=%d"
 qio_channel_socket_connect_sync(void *ioc, void *addr) "Socket connect sync ioc=%p addr=%p"
@@ -3257,11 +3503,11 @@ qio_channel_socket_accept(void *ioc) "Socket accept start ioc=%p"
 qio_channel_socket_accept_fail(void *ioc) "Socket accept fail ioc=%p"
 qio_channel_socket_accept_complete(void *ioc, void *cioc, int fd) "Socket accept complete ioc=%p cioc=%p fd=%d"
 
-# io/channel-file.c
+# channel-file.c
 qio_channel_file_new_fd(void *ioc, int fd) "File new fd ioc=%p fd=%d"
 qio_channel_file_new_path(void *ioc, const char *path, int flags, int mode, int fd) "File new fd ioc=%p path=%s flags=%d mode=%d fd=%d"
 
-# io/channel-tls.c
+# channel-tls.c
 qio_channel_tls_new_client(void *ioc, void *master, void *creds, const char *hostname) "TLS new client ioc=%p master=%p creds=%p hostname=%s"
 qio_channel_tls_new_server(void *ioc, void *master, void *creds, const char *aclname) "TLS new client ioc=%p master=%p creds=%p acltname=%s"
 qio_channel_tls_handshake_start(void *ioc) "TLS handshake start ioc=%p"
@@ -3271,7 +3517,7 @@ qio_channel_tls_handshake_complete(void *ioc) "TLS handshake complete ioc=%p"
 qio_channel_tls_credentials_allow(void *ioc) "TLS credentials allow ioc=%p"
 qio_channel_tls_credentials_deny(void *ioc) "TLS credentials deny ioc=%p"
 
-# io/channel-websock.c
+# channel-websock.c
 qio_channel_websock_new_server(void *ioc, void *master) "Websock new client ioc=%p master=%p"
 qio_channel_websock_handshake_start(void *ioc) "Websock handshake start ioc=%p"
 qio_channel_websock_handshake_pending(void *ioc, int status) "Websock handshake pending ioc=%p status=%d"
@@ -3286,14 +3532,15 @@ qio_channel_websock_payload_decode(void *ioc, uint8_t opcode, size_t payload_rem
 qio_channel_websock_encode(void *ioc, uint8_t opcode, size_t payloadlen, size_t headerlen) "Websocket encoded ioc=%p opcode=0x%x header-len=%zu payload-len=%zu"
 qio_channel_websock_close(void *ioc) "Websocket close ioc=%p"
 
-# io/channel-command.c
+# channel-command.c
 qio_channel_command_new_pid(void *ioc, int writefd, int readfd, int pid) "Command new pid ioc=%p writefd=%d readfd=%d pid=%d"
 qio_channel_command_new_spawn(void *ioc, const char *binary, int flags) "Command new spawn ioc=%p binary=%s flags=%d"
 qio_channel_command_abort(void *ioc, int pid) "Command abort ioc=%p pid=%d"
 qio_channel_command_wait(void *ioc, int pid, int ret, int status) "Command abort ioc=%p pid=%d ret=%d status=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# linux-user/signal.c
+# signal.c
+# */signal.c
 user_setup_frame(void *env, uint64_t frame_addr) "env=%p frame_addr=0x%"PRIx64
 user_setup_rt_frame(void *env, uint64_t frame_addr) "env=%p frame_addr=0x%"PRIx64
 user_do_rt_sigreturn(void *env, uint64_t frame_addr) "env=%p frame_addr=0x%"PRIx64
@@ -3305,7 +3552,7 @@ user_queue_signal(void *env, int target_sig) "env=%p signal %d"
 user_s390x_restore_sigregs(void *env, uint64_t sc_psw_addr, uint64_t env_psw_addr) "env=%p frame psw.addr 0x%"PRIx64 " current psw.addr 0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# migration/savevm.c
+# savevm.c
 qemu_loadvm_state_section(unsigned int section_type) "%d"
 qemu_loadvm_state_section_command(int ret) "%d"
 qemu_loadvm_state_section_partend(uint32_t section_id) "%u"
@@ -3351,15 +3598,11 @@ savevm_state_iterate(void) ""
 savevm_state_cleanup(void) ""
 savevm_state_complete_precopy(void) ""
 vmstate_save(const char *idstr, const char *vmsd_name) "%s, %s"
-vmstate_save_state_pre_save_res(const char *name, int res) "%s/%d"
-vmstate_save_state_loop(const char *name, const char *field, int n_elems) "%s/%s[%d]"
-vmstate_save_state_top(const char *idstr) "%s"
-vmstate_subsection_save_loop(const char *name, const char *sub) "%s/%s"
-vmstate_subsection_save_top(const char *idstr) "%s"
 vmstate_load(const char *idstr, const char *vmsd_name) "%s, %s"
-qemu_announce_self_iter(const char *mac) "%s"
+postcopy_pause_incoming(void) ""
+postcopy_pause_incoming_continued(void) ""
 
-# migration/vmstate.c
+# vmstate.c
 vmstate_load_field_error(const char *field, int ret) "field \"%s\" load failed, ret = %d"
 vmstate_load_state(const char *name, int version_id) "%s v%d"
 vmstate_load_state_end(const char *name, const char *reason, int val) "%s %s/%d"
@@ -3368,27 +3611,34 @@ vmstate_n_elems(const char *name, int n_elems) "%s: %d"
 vmstate_subsection_load(const char *parent) "%s"
 vmstate_subsection_load_bad(const char *parent,  const char *sub, const char *sub2) "%s: %s/%s"
 vmstate_subsection_load_good(const char *parent) "%s"
+vmstate_save_state_pre_save_res(const char *name, int res) "%s/%d"
+vmstate_save_state_loop(const char *name, const char *field, int n_elems) "%s/%s[%d]"
+vmstate_save_state_top(const char *idstr) "%s"
+vmstate_subsection_save_loop(const char *name, const char *sub) "%s/%s"
+vmstate_subsection_save_top(const char *idstr) "%s"
+
+# vmstate-types.c
 get_qtailq(const char *name, int version_id) "%s v%d"
 get_qtailq_end(const char *name, const char *reason, int val) "%s %s/%d"
 put_qtailq(const char *name, int version_id) "%s v%d"
 put_qtailq_end(const char *name, const char *reason) "%s %s"
 
-# migration/qemu-file.c
+# qemu-file.c
 qemu_file_fclose(void) ""
 
-# migration/ram.c
+# ram.c
 get_queued_page(const char *block_name, uint64_t tmp_offset, unsigned long page_abs) "%s/0x%" PRIx64 " page_abs=0x%lx"
 get_queued_page_not_dirty(const char *block_name, uint64_t tmp_offset, unsigned long page_abs, int sent) "%s/0x%" PRIx64 " page_abs=0x%lx (sent=%d)"
 migration_bitmap_sync_start(void) ""
 migration_bitmap_sync_end(uint64_t dirty_pages) "dirty_pages %" PRIu64
 migration_throttle(void) ""
-multifd_recv(uint8_t id, uint64_t packet_num, uint32_t used, uint32_t flags) "channel %d packet number %" PRIu64 " pages %d flags 0x%x"
+multifd_recv(uint8_t id, uint64_t packet_num, uint32_t used, uint32_t flags, uint32_t next_packet_size) "channel %d packet number %" PRIu64 " pages %d flags 0x%x next packet size %d"
 multifd_recv_sync_main(long packet_num) "packet num %ld"
 multifd_recv_sync_main_signal(uint8_t id) "channel %d"
 multifd_recv_sync_main_wait(uint8_t id) "channel %d"
 multifd_recv_thread_end(uint8_t id, uint64_t packets, uint64_t pages) "channel %d packets %" PRIu64 " pages %" PRIu64
 multifd_recv_thread_start(uint8_t id) "%d"
-multifd_send(uint8_t id, uint64_t packet_num, uint32_t used, uint32_t flags) "channel %d packet_num %" PRIu64 " pages %d flags 0x%x"
+multifd_send(uint8_t id, uint64_t packet_num, uint32_t used, uint32_t flags, uint32_t next_packet_size) "channel %d packet_num %" PRIu64 " pages %d flags 0x%x next packet size %d"
 multifd_send_sync_main(long packet_num) "packet num %ld"
 multifd_send_sync_main_signal(uint8_t id) "channel %d"
 multifd_send_sync_main_wait(uint8_t id) "channel %d"
@@ -3409,8 +3659,12 @@ ram_dirty_bitmap_sync_complete(void) ""
 ram_state_resume_prepare(uint64_t v) "%" PRId64
 colo_flush_ram_cache_begin(uint64_t dirty_pages) "dirty_pages %" PRIu64
 colo_flush_ram_cache_end(void) ""
+save_xbzrle_page_skipping(void) ""
+save_xbzrle_page_overflow(void) ""
+ram_save_iterate_big_wait(uint64_t milliconds, int iterations) "big wait: %" PRIu64 " milliseconds, %d iterations"
+ram_load_complete(int ret, uint64_t seq_iter) "exit_code %d seq iteration %" PRIu64
 
-# migration/migration.c
+# migration.c
 await_return_path_close_on_source_close(void) ""
 await_return_path_close_on_source_joining(void) ""
 migrate_set_state(const char *new_state) "new state %s"
@@ -3436,11 +3690,7 @@ open_return_path_on_source_continue(void) ""
 postcopy_start(void) ""
 postcopy_pause_return_path(void) ""
 postcopy_pause_return_path_continued(void) ""
-postcopy_pause_fault_thread(void) ""
-postcopy_pause_fault_thread_continued(void) ""
 postcopy_pause_continued(void) ""
-postcopy_pause_incoming(void) ""
-postcopy_pause_incoming_continued(void) ""
 postcopy_start_set_run(void) ""
 source_return_path_thread_bad_end(void) ""
 source_return_path_thread_end(void) ""
@@ -3449,19 +3699,21 @@ source_return_path_thread_loop_top(void) ""
 source_return_path_thread_pong(uint32_t val) "0x%x"
 source_return_path_thread_shut(uint32_t val) "0x%x"
 source_return_path_thread_resume_ack(uint32_t v) "%"PRIu32
-migrate_global_state_post_load(const char *state) "loaded state: %s"
-migrate_global_state_pre_save(const char *state) "saved state: %s"
 migration_thread_low_pending(uint64_t pending) "%" PRIu64
-migrate_state_too_big(void) ""
 migrate_transferred(uint64_t tranferred, uint64_t time_spent, uint64_t bandwidth, uint64_t size) "transferred %" PRIu64 " time_spent %" PRIu64 " bandwidth %" PRIu64 " max_size %" PRId64
 process_incoming_migration_co_end(int ret, int ps) "ret=%d postcopy-state=%d"
 process_incoming_migration_co_postcopy_end_main(void) ""
+
+# channel.c
 migration_set_incoming_channel(void *ioc, const char *ioctype) "ioc=%p ioctype=%s"
 migration_set_outgoing_channel(void *ioc, const char *ioctype, const char *hostname, void *err)  "ioc=%p ioctype=%s hostname=%s err=%p"
-mark_postcopy_blocktime_begin(uint64_t addr, void *dd, uint32_t time, int cpu, int received) "addr: 0x%" PRIx64 ", dd: %p, time: %u, cpu: %d, already_received: %d"
-mark_postcopy_blocktime_end(uint64_t addr, void *dd, uint32_t time, int affected_cpu) "addr: 0x%" PRIx64 ", dd: %p, time: %u, affected_cpu: %d"
 
-# migration/rdma.c
+# global_state.c
+migrate_state_too_big(void) ""
+migrate_global_state_post_load(const char *state) "loaded state: %s"
+migrate_global_state_pre_save(const char *state) "saved state: %s"
+
+# rdma.c
 qemu_rdma_accept_incoming_migration(void) ""
 qemu_rdma_accept_incoming_migration_accepted(void) ""
 qemu_rdma_accept_pin_state(bool pin) "%d"
@@ -3523,7 +3775,7 @@ rdma_start_incoming_migration_after_rdma_listen(void) ""
 rdma_start_outgoing_migration_after_rdma_connect(void) ""
 rdma_start_outgoing_migration_after_rdma_source_init(void) ""
 
-# migration/postcopy-ram.c
+# postcopy-ram.c
 postcopy_discard_send_finish(const char *ramblock, int nwords, int ncmds) "%s mask words sent=%d in %d commands"
 postcopy_discard_send_range(const char *ramblock, unsigned long start, unsigned long length) "%s:%lx/%lx"
 postcopy_cleanup_range(const char *ramblock, void *host_addr, size_t offset, size_t length) "%s: %p offset=0x%zx length=0x%zx"
@@ -3532,6 +3784,10 @@ postcopy_nhp_range(const char *ramblock, void *host_addr, size_t offset, size_t 
 postcopy_place_page(void *host_addr) "host=%p"
 postcopy_place_page_zero(void *host_addr) "host=%p"
 postcopy_ram_enable_notify(void) ""
+mark_postcopy_blocktime_begin(uint64_t addr, void *dd, uint32_t time, int cpu, int received) "addr: 0x%" PRIx64 ", dd: %p, time: %u, cpu: %d, already_received: %d"
+mark_postcopy_blocktime_end(uint64_t addr, void *dd, uint32_t time, int affected_cpu) "addr: 0x%" PRIx64 ", dd: %p, time: %u, affected_cpu: %d"
+postcopy_pause_fault_thread(void) ""
+postcopy_pause_fault_thread_continued(void) ""
 postcopy_ram_fault_thread_entry(void) ""
 postcopy_ram_fault_thread_exit(void) ""
 postcopy_ram_fault_thread_fds_core(int baseufd, int quitfd) "ufd: %d quitfd: %d"
@@ -3547,26 +3803,22 @@ postcopy_request_shared_page(const char *sharer, const char *rb, uint64_t rb_off
 postcopy_request_shared_page_present(const char *sharer, const char *rb, uint64_t rb_offset) "%s already %s offset 0x%"PRIx64
 postcopy_wake_shared(uint64_t client_addr, const char *rb) "at 0x%"PRIx64" in %s"
 
-save_xbzrle_page_skipping(void) ""
-save_xbzrle_page_overflow(void) ""
-ram_save_iterate_big_wait(uint64_t milliconds, int iterations) "big wait: %" PRIu64 " milliseconds, %d iterations"
-ram_load_complete(int ret, uint64_t seq_iter) "exit_code %d seq iteration %" PRIu64
 get_mem_fault_cpu_index(int cpu, uint32_t pid) "cpu: %d, pid: %u"
 
-# migration/exec.c
+# exec.c
 migration_exec_outgoing(const char *cmd) "cmd=%s"
 migration_exec_incoming(const char *cmd) "cmd=%s"
 
-# migration/fd.c
+# fd.c
 migration_fd_outgoing(int fd) "fd=%d"
 migration_fd_incoming(int fd) "fd=%d"
 
-# migration/socket.c
+# socket.c
 migration_socket_incoming_accepted(void) ""
 migration_socket_outgoing_connected(const char *hostname) "hostname=%s"
 migration_socket_outgoing_error(const char *err) "error=%s"
 
-# migration/tls.c
+# tls.c
 migration_tls_outgoing_handshake_start(const char *hostname) "hostname=%s"
 migration_tls_outgoing_handshake_error(const char *err) "err=%s"
 migration_tls_outgoing_handshake_complete(void) ""
@@ -3574,13 +3826,15 @@ migration_tls_incoming_handshake_start(void) ""
 migration_tls_incoming_handshake_error(const char *err) "err=%s"
 migration_tls_incoming_handshake_complete(void) ""
 
-# migration/colo.c
+# colo.c
 colo_vm_state_change(const char *old, const char *new) "Change '%s' => '%s'"
 colo_send_message(const char *msg) "Send '%s' message"
 colo_receive_message(const char *msg) "Receive '%s' message"
+
+# colo-failover.c
 colo_failover_set_state(const char *new_state) "new state %s"
 
-# migration/block-dirty-bitmap.c
+# block-dirty-bitmap.c
 send_bitmap_header_enter(void) ""
 send_bitmap_bits(uint32_t flags, uint64_t start_sector, uint32_t nr_sectors, uint64_t data_size) "flags: 0x%x, start_sector: %" PRIu64 ", nr_sectors: %" PRIu32 ", data_size: %" PRIu64
 dirty_bitmap_save_iterate(int in_postcopy) "in postcopy: %d"
@@ -3593,24 +3847,28 @@ dirty_bitmap_load_bits_zeroes(void) ""
 dirty_bitmap_load_header(uint32_t flags) "flags 0x%x"
 dirty_bitmap_load_enter(void) ""
 dirty_bitmap_load_success(void) ""
-# nbd/client.c
+# See docs/devel/tracing.txt for syntax documentation.
+
+# client.c
 nbd_send_option_request(uint32_t opt, const char *name, uint32_t len) "Sending option request %" PRIu32" (%s), len %" PRIu32
 nbd_receive_option_reply(uint32_t option, const char *optname, uint32_t type, const char *typename, uint32_t length) "Received option reply %" PRIu32" (%s), type %" PRIu32" (%s), len %" PRIu32
+nbd_server_error_msg(uint32_t err, const char *type, const char *msg) "server reported error 0x%" PRIx32 " (%s) with additional message: %s"
 nbd_reply_err_unsup(uint32_t option, const char *name) "server doesn't understand request %" PRIu32 " (%s), attempting fallback"
-nbd_opt_go_start(const char *name) "Attempting NBD_OPT_GO for export '%s'"
-nbd_opt_go_success(void) "Export is good to go"
-nbd_opt_go_info_unknown(int info, const char *name) "Ignoring unknown info %d (%s)"
-nbd_opt_go_info_block_size(uint32_t minimum, uint32_t preferred, uint32_t maximum) "Block sizes are 0x%" PRIx32 ", 0x%" PRIx32 ", 0x%" PRIx32
+nbd_receive_list(const char *name, const char *desc) "export list includes '%s', description '%s'"
+nbd_opt_info_go_start(const char *opt, const char *name) "Attempting %s for export '%s'"
+nbd_opt_info_go_success(const char *opt) "Export is ready after %s request"
+nbd_opt_info_unknown(int info, const char *name) "Ignoring unknown info %d (%s)"
+nbd_opt_info_block_size(uint32_t minimum, uint32_t preferred, uint32_t maximum) "Block sizes are 0x%" PRIx32 ", 0x%" PRIx32 ", 0x%" PRIx32
 nbd_receive_query_exports_start(const char *wantname) "Querying export list for '%s'"
 nbd_receive_query_exports_success(const char *wantname) "Found desired export name '%s'"
 nbd_receive_starttls_new_client(void) "Setting up TLS"
 nbd_receive_starttls_tls_handshake(void) "Starting TLS handshake"
-nbd_opt_meta_request(const char *context, const char *export) "Requesting to set meta context %s for export %s"
-nbd_opt_meta_reply(const char *context, uint32_t id) "Received mapping of context %s to id %" PRIu32
-nbd_receive_negotiate(void *tlscreds, const char *hostname) "Receiving negotiation tlscreds=%p hostname=%s"
+nbd_opt_meta_request(const char *optname, const char *context, const char *export) "Requesting %s %s for export %s"
+nbd_opt_meta_reply(const char *optname, const char *context, uint32_t id) "Received %s mapping of %s to id %" PRIu32
+nbd_start_negotiate(void *tlscreds, const char *hostname) "Receiving negotiation tlscreds=%p hostname=%s"
 nbd_receive_negotiate_magic(uint64_t magic) "Magic is 0x%" PRIx64
 nbd_receive_negotiate_server_flags(uint32_t globalflags) "Global flags are 0x%" PRIx32
-nbd_receive_negotiate_default_name(void) "Using default NBD export name \"\""
+nbd_receive_negotiate_name(const char *name) "Requesting NBD export name '%s'"
 nbd_receive_negotiate_size_flags(uint64_t size, uint16_t flags) "Size is %" PRIu64 ", export flags 0x%" PRIx16
 nbd_init_set_socket(void) "Setting NBD socket"
 nbd_init_set_block_size(unsigned long block_size) "Setting block size to %lu"
@@ -3626,10 +3884,10 @@ nbd_send_request(uint64_t from, uint32_t len, uint64_t handle, uint16_t flags, u
 nbd_receive_simple_reply(int32_t error, const char *errname, uint64_t handle) "Got simple reply: { .error = %" PRId32 " (%s), handle = %" PRIu64" }"
 nbd_receive_structured_reply_chunk(uint16_t flags, uint16_t type, const char *name, uint64_t handle, uint32_t length) "Got structured reply chunk: { flags = 0x%" PRIx16 ", type = %d (%s), handle = %" PRIu64 ", length = %" PRIu32 " }"
 
-# nbd/common.c
+# common.c
 nbd_unknown_error(int err) "Squashing unexpected error %d to EINVAL"
 
-# nbd/server.c
+# server.c
 nbd_negotiate_send_rep_len(uint32_t opt, const char *optname, uint32_t type, const char *typename, uint32_t len) "Reply opt=%" PRIu32 " (%s), type=%" PRIu32 " (%s), len=%" PRIu32
 nbd_negotiate_send_rep_err(const char *msg) "sending error message \"%s\""
 nbd_negotiate_send_rep_list(const char *name, const char *desc) "Advertising export name '%s' description '%s'"
@@ -3649,7 +3907,6 @@ nbd_negotiate_options_flags(uint32_t flags) "Received client flags 0x%" PRIx32
 nbd_negotiate_options_check_magic(uint64_t magic) "Checking opts magic 0x%" PRIx64
 nbd_negotiate_options_check_option(uint32_t option, const char *name) "Checking option %" PRIu32 " (%s)"
 nbd_negotiate_begin(void) "Beginning negotiation"
-nbd_negotiate_old_style(uint64_t size, unsigned flags) "advertising size %" PRIu64 " and flags 0x%x"
 nbd_negotiate_new_style_size_flags(uint64_t size, unsigned flags) "advertising size %" PRIu64 " and flags 0x%x"
 nbd_negotiate_success(void) "Negotiation succeeded"
 nbd_receive_request(uint32_t magic, uint16_t flags, uint16_t type, uint64_t from, uint32_t len) "Got request: { magic = 0x%" PRIx32 ", .flags = 0x%" PRIx16 ", .type = 0x%" PRIx16 ", from = %" PRIu64 ", len = %" PRIu32 " }"
@@ -3663,17 +3920,20 @@ nbd_co_send_extents(uint64_t handle, unsigned int extents, uint32_t id, uint64_t
 nbd_co_send_structured_error(uint64_t handle, int err, const char *errname, const char *msg) "Send structured error reply: handle = %" PRIu64 ", error = %d (%s), msg = '%s'"
 nbd_co_receive_request_decode_type(uint64_t handle, uint16_t type, const char *name) "Decoding type: handle = %" PRIu64 ", type = %" PRIu16 " (%s)"
 nbd_co_receive_request_payload_received(uint64_t handle, uint32_t len) "Payload received: handle = %" PRIu64 ", len = %" PRIu32
-nbd_co_receive_request_cmd_write(uint32_t len) "Reading %" PRIu32 " byte(s)"
+nbd_co_receive_align_compliance(const char *op, uint64_t from, uint32_t len, uint32_t align) "client sent non-compliant unaligned %s request: from=0x%" PRIx64 ", len=0x%" PRIx32 ", align=0x%" PRIx32
 nbd_trip(void) "Reading request"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# net/vhost-user.c
+# announce.c
+qemu_announce_self_iter(const char *mac) "%s"
+
+# vhost-user.c
 vhost_user_event(const char *chr, int event) "chr: %s got event: %d"
 
-# net/colo.c
+# colo.c
 colo_proxy_main(const char *chr) ": %s"
 
-# net/colo-compare.c
+# colo-compare.c
 colo_compare_main(const char *chr) ": %s"
 colo_compare_udp_miscompare(const char *sta, int size) ": %s = %d"
 colo_compare_icmp_miscompare(const char *sta, int size) ": %s = %d"
@@ -3682,11 +3942,13 @@ colo_old_packet_check_found(int64_t old_time) "%" PRId64
 colo_compare_miscompare(void) ""
 colo_compare_tcp_info(const char *pkt, uint32_t seq, uint32_t ack, int hdlen, int pdlen, int offset, int flags) "%s: seq/ack= %u/%u hdlen= %d pdlen= %d offset= %d flags=%d\n"
 
-# net/filter-rewriter.c
+# filter-rewriter.c
 colo_filter_rewriter_debug(void) ""
 colo_filter_rewriter_pkt_info(const char *func, const char *src, const char *dst, uint32_t seq, uint32_t ack, uint32_t flag) "%s: src/dst: %s/%s p: seq/ack=%u/%u  flags=0x%x\n"
 colo_filter_rewriter_conn_offset(uint32_t offset) ": offset=%u\n"
-# qapi/qapi-visit-core.c
+# See docs/devel/tracing.txt for syntax documentation.
+
+# qapi-visit-core.c
 visit_free(void *v) "v=%p"
 visit_complete(void *v, void *opaque) "v=%p opaque=%p"
 
@@ -3722,15 +3984,17 @@ visit_type_any(void *v, const char *name, void *obj) "v=%p name=%s obj=%p"
 visit_type_null(void *v, const char *name, void *obj) "v=%p name=%s obj=%p"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# qom/object.c
+# object.c
 object_dynamic_cast_assert(const char *type, const char *target, const char *file, int line, const char *func) "%s->%s (%s:%d:%s)"
 object_class_dynamic_cast_assert(const char *type, const char *target, const char *file, int line, const char *func) "%s->%s (%s:%d:%s)"
-# scsi/pr-manager.c
+# See docs/devel/tracing.txt for syntax documentation.
+
+# pr-manager.c
 pr_manager_execute(int fd, int cmd, int sa) "fd=%d cmd=0x%02x service action=0x%02x"
 pr_manager_run(int fd, int cmd, int sa) "fd=%d cmd=0x%02x service action=0x%02x"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/arm/helper.c
+# helper.c
 arm_gt_recalc(int timer, int irqstate, uint64_t nexttick) "gt recalc: timer %d irqstate %d next tick 0x%" PRIx64
 arm_gt_recalc_disabled(int timer) "gt recalc: timer %d irqstate 0 timer disabled"
 arm_gt_cval_write(int timer, uint64_t value) "gt_cval_write: timer %d value 0x%" PRIx64
@@ -3739,17 +4003,35 @@ arm_gt_ctl_write(int timer, uint64_t value) "gt_ctl_write: timer %d value 0x%" P
 arm_gt_imask_toggle(int timer, int irqstate) "gt_ctl_write: timer %d IMASK toggle, new irqstate %d"
 arm_gt_cntvoff_write(uint64_t value) "gt_cntvoff_write: value 0x%" PRIx64
 
-# target/arm/kvm.c
+# kvm.c
 kvm_arm_fixup_msi_route(uint64_t iova, uint64_t gpa) "MSI iova = 0x%"PRIx64" is translated into 0x%"PRIx64
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/i386/kvm.c
+# mem_helper.c
+disable hppa_tlb_flush_ent(void *env, void *ent, uint64_t va_b, uint64_t va_e, uint64_t pa) "env=%p ent=%p va_b=0x%lx va_e=0x%lx pa=0x%lx"
+disable hppa_tlb_find_entry(void *env, void *ent, int valid, uint64_t va_b, uint64_t va_e, uint64_t pa) "env=%p ent=%p valid=%d va_b=0x%lx va_e=0x%lx pa=0x%lx"
+disable hppa_tlb_find_entry_not_found(void *env, uint64_t addr) "env=%p addr=%08lx"
+disable hppa_tlb_get_physical_address(void *env, int ret, int prot, uint64_t addr, uint64_t phys) "env=%p ret=%d prot=%d addr=0x%lx phys=0x%lx"
+disable hppa_tlb_fill_excp(void *env, uint64_t addr, int size, int type, int mmu_idx) "env=%p addr=0x%lx size=%d type=%d mmu_idx=%d"
+disable hppa_tlb_fill_success(void *env, uint64_t addr, uint64_t phys, int size, int type, int mmu_idx) "env=%p addr=0x%lx phys=0x%lx size=%d type=%d mmu_idx=%d"
+disable hppa_tlb_itlba(void *env, void *ent, uint64_t va_b, uint64_t va_e, uint64_t pa) "env=%p ent=%p va_b=0x%lx va_e=0x%lx pa=0x%lx"
+disable hppa_tlb_itlbp(void *env, void *ent, int access_id, int u, int pl2, int pl1, int type, int b, int d, int t) "env=%p ent=%p access_id=%x u=%d pl2=%d pl1=%d type=%d b=%d d=%d t=%d"
+disable hppa_tlb_ptlb(void *env) "env=%p"
+disable hppa_tlb_ptlbe(void *env) "env=%p"
+disable hppa_tlb_lpa_success(void *env, uint64_t addr, uint64_t phys) "env=%p addr=0x%lx phys=0x%lx"
+disable hppa_tlb_lpa_failed(void *env, uint64_t addr) "env=%p addr=0x%lx"
+
+# op_helper.c
+disable hppa_tlb_probe(uint64_t addr, int level, int want) "addr=0x%lx level=%d want=%d"
+# See docs/devel/tracing.txt for syntax documentation.
+
+# kvm.c
 kvm_x86_fixup_msi_error(uint32_t gsi) "VT-d failed to remap interrupt for GSI %" PRIu32
 kvm_x86_add_msi_route(int virq) "Adding route entry for virq %d"
 kvm_x86_remove_msi_route(int virq) "Removing route entry for virq %d"
 kvm_x86_update_msi_routes(int num) "Updated %d MSI routes"
 
-# target/i386/sev.c
+# sev.c
 kvm_sev_init(void) ""
 kvm_memcrypt_register_region(void *addr, size_t len) "addr %p len 0x%zu"
 kvm_memcrypt_unregister_region(void *addr, size_t len) "addr %p len 0x%zu"
@@ -3760,41 +4042,44 @@ kvm_sev_launch_measurement(const char *value) "data %s"
 kvm_sev_launch_finish(void) ""
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/mips/translate.c
+# translate.c
 mips_translate_c0(const char *instr, const char *rn, int reg, int sel) "%s %s (reg %d sel %d)"
 mips_translate_tr(const char *instr, int rt, int u, int sel, int h) "%s (reg %d u %d sel %d h %d)"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/ppc/kvm.c
+# kvm.c
 kvm_failed_spr_set(int str, const char *msg) "Warning: Unable to set SPR %d to KVM: %s"
 kvm_failed_spr_get(int str, const char *msg) "Warning: Unable to retrieve SPR %d from KVM: %s"
+# target/riscv/cpu_helper.c
+riscv_trap(uint64_t hartid, bool async, uint64_t cause, uint64_t epc, uint64_t tval, const char *desc) "hart:%"PRId64", async:%d, cause:%"PRId64", epc:0x%"PRIx64", tval:0x%"PRIx64", desc=%s"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/s390x/mmu_helper.c
+# mmu_helper.c
 get_skeys_nonzero(int rc) "SKEY: Call to get_skeys unexpectedly returned %d"
 set_skeys_nonzero(int rc) "SKEY: Call to set_skeys unexpectedly returned %d"
 
-# target/s390x/ioinst.c
+# ioinst.c
 ioinst(const char *insn) "IOINST: %s"
 ioinst_sch_id(const char *insn, int cssid, int ssid, int schid) "IOINST: %s (%x.%x.%04x)"
 ioinst_chp_id(const char *insn, int cssid, int chpid) "IOINST: %s (%x.%02x)"
 ioinst_chsc_cmd(uint16_t cmd, uint16_t len) "IOINST: chsc command 0x%04x, len 0x%04x"
 
-# target/s390x/kvm.c
+# kvm.c
 kvm_enable_cmma(int rc) "CMMA: enabling with result code %d"
 kvm_clear_cmma(int rc) "CMMA: clearing with result code %d"
 kvm_failed_cpu_state_set(int cpu_index, uint8_t state, const char *msg) "Warning: Unable to set cpu %d state %" PRIu8 " to KVM: %s"
+kvm_assign_subch_ioeventfd(int fd, uint32_t addr, bool assign, int datamatch) "fd: %d sch: @0x%x assign: %d vq: %d"
 
-# target/s390x/cpu.c
+# cpu.c
 cpu_set_state(int cpu_index, uint8_t state) "setting cpu %d state to %" PRIu8
 cpu_halt(int cpu_index) "halting cpu %d"
 cpu_unhalt(int cpu_index) "unhalting cpu %d"
 
-# target/s390x/sigp.c
+# sigp.c
 sigp_finished(uint8_t order, int cpu_index, int dst_index, int cc) "SIGP: Finished order %u on cpu %d -> cpu %d with cc=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# target/sparc/mmu_helper.c
+# mmu_helper.c
 mmu_helper_dfault(uint64_t address, uint64_t context, int mmu_idx, uint32_t tl) "DFAULT at 0x%"PRIx64" context 0x%"PRIx64" mmu_idx=%d tl=%d"
 mmu_helper_dprot(uint64_t address, uint64_t context, int mmu_idx, uint32_t tl) "DPROT at 0x%"PRIx64" context 0x%"PRIx64" mmu_idx=%d tl=%d"
 mmu_helper_dmiss(uint64_t address, uint64_t context) "DMISS at 0x%"PRIx64" context 0x%"PRIx64
@@ -3804,16 +4089,16 @@ mmu_helper_get_phys_addr_code(uint32_t tl, int mmu_idx, uint64_t prim_context, u
 mmu_helper_get_phys_addr_data(uint32_t tl, int mmu_idx, uint64_t prim_context, uint64_t sec_context, uint64_t address) "tl=%d mmu_idx=%d primary context=0x%"PRIx64" secondary context=0x%"PRIx64" address=0x%"PRIx64
 mmu_helper_mmu_fault(uint64_t address, uint64_t paddr, int mmu_idx, uint32_t tl, uint64_t prim_context, uint64_t sec_context) "Translate at 0x%"PRIx64" -> 0x%"PRIx64", mmu_idx=%d tl=%d primary context=0x%"PRIx64" secondary context=0x%"PRIx64
 
-# target/sparc/int64_helper.c
+# int64_helper.c
 int_helper_set_softint(uint32_t softint) "new 0x%08x"
 int_helper_clear_softint(uint32_t softint) "new 0x%08x"
 int_helper_write_softint(uint32_t softint) "new 0x%08x"
 
-# target/sparc/int32_helper.c
+# int32_helper.c
 int_helper_icache_freeze(void) "Instruction cache: freeze"
 int_helper_dcache_freeze(void) "Data cache: freeze"
 
-# target/sparc/win_helper.c
+# win_helper.c
 win_helper_gregset_error(uint32_t pstate) "ERROR in get_gregset: active pstate bits=0x%x"
 win_helper_switch_pstate(uint32_t pstate_regs, uint32_t new_pstate_regs) "change_pstate: switching regs old=0x%x new=0x%x"
 win_helper_no_switch_pstate(uint32_t new_pstate_regs) "change_pstate: regs new=0x%x (unchanged)"
@@ -3822,7 +4107,7 @@ win_helper_done(uint32_t tl) "tl=%d"
 win_helper_retry(uint32_t tl) "tl=%d"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# ui/console.c
+# console.c
 console_gfx_new(void) ""
 console_gfx_reuse(int index) "%d"
 console_gfx_close(int index) "%d"
@@ -3839,7 +4124,9 @@ displaychangelistener_register(void *dcl, const char *name) "%p [ %s ]"
 displaychangelistener_unregister(void *dcl, const char *name) "%p [ %s ]"
 ppm_save(const char *filename, void *display_surface) "%s surface=%p"
 
-# ui/gtk.c
+# gtk.c
+# gtk-gl-area.c
+# gtk-egl.c
 gd_switch(const char *tab, int width, int height) "tab=%s, width=%d, height=%d"
 gd_update(const char *tab, int x, int y, int w, int h) "tab=%s, x=%d, y=%d, w=%d, h=%d"
 gd_key_event(const char *tab, int gdk_keycode, int qkeycode, const char *action) "tab=%s, translated GDK keycode %d to QKeyCode %d (%s)"
@@ -3847,7 +4134,10 @@ gd_grab(const char *tab, const char *device, const char *reason) "tab=%s, dev=%s
 gd_ungrab(const char *tab, const char *device) "tab=%s, dev=%s"
 gd_keymap_windowing(const char *name) "backend=%s"
 
-# ui/vnc.c
+# vnc-auth-sasl.c
+# vnc-ws.c
+# vnc-auth-vencrypt.c
+# vnc.c
 vnc_key_guest_leds(bool caps, bool num, bool scroll) "caps %d, num %d, scroll %d"
 vnc_key_map_init(const char *layout) "%s"
 vnc_key_event_ext(bool down, int sym, int keycode, const char *name) "down %d, sym 0x%x, keycode 0x%x [%s]"
@@ -3883,7 +4173,7 @@ vnc_auth_sasl_username(void *state, const char *name) "VNC client auth SASL user
 vnc_auth_sasl_acl(void *state, int allow) "VNC client auth SASL ACL state=%p allow=%d"
 
 
-# ui/input.c
+# input.c
 input_event_key_number(int conidx, int number, const char *qcode, bool down) "con %d, key number 0x%x [%s], down %d"
 input_event_key_qcode(int conidx, const char *qcode, bool down) "con %d, key qcode %s, down %d"
 input_event_btn(int conidx, const char *btn, bool down) "con %d, button %s, down %d"
@@ -3892,7 +4182,7 @@ input_event_abs(int conidx, const char *axis, int value) "con %d, axis %s, value
 input_event_sync(void) ""
 input_mouse_mode(int absolute) "absolute %d"
 
-# ui/spice-display.c
+# spice-display.c
 qemu_spice_add_memslot(int qid, uint32_t slot_id, unsigned long virt_start, unsigned long virt_end, int async) "%d %u: host virt 0x%lx - 0x%lx async=%d"
 qemu_spice_del_memslot(int qid, uint32_t gid, uint32_t slot_id) "%d gid=%u sid=%u"
 qemu_spice_create_primary_surface(int qid, uint32_t sid, void *surface, int async) "%d sid=%u surface=%p async=%d"
@@ -3912,65 +4202,73 @@ qemu_spice_gl_forward_dmabuf(int qid, uint32_t width, uint32_t height) "%d %dx%d
 qemu_spice_gl_render_dmabuf(int qid, uint32_t width, uint32_t height) "%d %dx%d"
 qemu_spice_gl_update(int qid, uint32_t x, uint32_t y, uint32_t w, uint32_t h) "%d +%d+%d %dx%d"
 
-# ui/keymaps.c
+# keymaps.c
 keymap_parse(const char *file) "file %s"
 keymap_add(int sym, int code, const char *line) "sym=0x%04x code=0x%04x (line: %s)"
 keymap_unmapped(int sym) "sym=0x%04x"
 
-# ui/x_keymap.c
+# x_keymap.c
 xkeymap_extension(const char *name) "extension '%s'"
 xkeymap_vendor(const char *name) "vendor '%s'"
 xkeymap_keycodes(const char *name) "keycodes '%s'"
 xkeymap_keymap(const char *name) "keymap '%s'"
 # See docs/devel/tracing.txt for syntax documentation.
 
-# util/aio-posix.c
+# aio-posix.c
 run_poll_handlers_begin(void *ctx, int64_t max_ns, int64_t timeout) "ctx %p max_ns %"PRId64 " timeout %"PRId64
 run_poll_handlers_end(void *ctx, bool progress, int64_t timeout) "ctx %p progress %d new timeout %"PRId64
 poll_shrink(void *ctx, int64_t old, int64_t new) "ctx %p old %"PRId64" new %"PRId64
 poll_grow(void *ctx, int64_t old, int64_t new) "ctx %p old %"PRId64" new %"PRId64
 
-# util/async.c
+# async.c
 aio_co_schedule(void *ctx, void *co) "ctx %p co %p"
 aio_co_schedule_bh_cb(void *ctx, void *co) "ctx %p co %p"
 
-# util/thread-pool.c
+# thread-pool.c
 thread_pool_submit(void *pool, void *req, void *opaque) "pool %p req %p opaque %p"
 thread_pool_complete(void *pool, void *req, void *opaque, int ret) "pool %p req %p opaque %p ret %d"
 thread_pool_cancel(void *req, void *opaque) "req %p opaque %p"
 
-# util/buffer.c
+# buffer.c
 buffer_resize(const char *buf, size_t olen, size_t len) "%s: old %zd, new %zd"
 buffer_move_empty(const char *buf, size_t len, const char *from) "%s: %zd bytes from %s"
 buffer_move(const char *buf, size_t len, const char *from) "%s: %zd bytes from %s"
 buffer_free(const char *buf, size_t len) "%s: capacity %zd"
 
-# util/qemu-coroutine.c
+# filemonitor-inotify.c
+qemu_file_monitor_add_watch(void *mon, const char *dirpath, const char *filename, void *cb, void *opaque, int64_t id) "File monitor %p add watch dir='%s' file='%s' cb=%p opaque=%p id=%" PRId64
+qemu_file_monitor_remove_watch(void *mon, const char *dirpath, int64_t id) "File monitor %p remove watch dir='%s' id=%" PRId64
+qemu_file_monitor_new(void *mon, int fd) "File monitor %p created fd=%d"
+qemu_file_monitor_enable_watch(void *mon, const char *dirpath, int id) "File monitor %p enable watch dir='%s' id=%u"
+qemu_file_monitor_disable_watch(void *mon, const char *dirpath, int id) "Fle monitor %p disable watch dir='%s' id=%u"
+qemu_file_monitor_event(void *mon, const char *dirpath, const char *filename, int mask, unsigned int id) "File monitor %p event dir='%s' file='%s' mask=0x%x id=%u"
+qemu_file_monitor_dispatch(void *mon, const char *dirpath, const char *filename, int ev, void *cb, void *opaque, int64_t id) "File monitor %p dispatch dir='%s' file='%s' ev=%d cb=%p opaque=%p id=%" PRId64
+
+# qemu-coroutine.c
 qemu_aio_coroutine_enter(void *ctx, void *from, void *to, void *opaque) "ctx %p from %p to %p opaque %p"
 qemu_coroutine_yield(void *from, void *to) "from %p to %p"
 qemu_coroutine_terminate(void *co) "self %p"
 
-# util/qemu-coroutine-lock.c
-qemu_co_queue_run_restart(void *co) "co %p"
+# qemu-coroutine-lock.c
 qemu_co_mutex_lock_uncontended(void *mutex, void *self) "mutex %p self %p"
 qemu_co_mutex_lock_entry(void *mutex, void *self) "mutex %p self %p"
 qemu_co_mutex_lock_return(void *mutex, void *self) "mutex %p self %p"
 qemu_co_mutex_unlock_entry(void *mutex, void *self) "mutex %p self %p"
 qemu_co_mutex_unlock_return(void *mutex, void *self) "mutex %p self %p"
 
-# util/oslib-win32.c
-# util/oslib-posix.c
+# oslib-win32.c
+# oslib-posix.c
 qemu_memalign(size_t alignment, size_t size, void *ptr) "alignment %zu size %zu ptr %p"
 qemu_anon_ram_alloc(size_t size, void *ptr) "size %zu ptr %p"
 qemu_vfree(void *ptr) "ptr %p"
 qemu_anon_ram_free(void *ptr, size_t size) "ptr %p size %zu"
 
-# util/hbitmap.c
+# hbitmap.c
 hbitmap_iter_skip_words(const void *hb, void *hbi, uint64_t pos, unsigned long cur) "hb %p hbi %p pos %"PRId64" cur 0x%lx"
 hbitmap_reset(void *hb, uint64_t start, uint64_t count, uint64_t sbit, uint64_t ebit) "hb %p items %"PRIu64",%"PRIu64" bits %"PRIu64"..%"PRIu64
 hbitmap_set(void *hb, uint64_t start, uint64_t count, uint64_t sbit, uint64_t ebit) "hb %p items %"PRIu64",%"PRIu64" bits %"PRIu64"..%"PRIu64
 
-# util/lockcnt.c
+# lockcnt.c
 lockcnt_fast_path_attempt(const void *lockcnt, int expected, int new) "lockcnt %p fast path %d->%d"
 lockcnt_fast_path_success(const void *lockcnt, int expected, int new) "lockcnt %p fast path %d->%d succeeded"
 lockcnt_unlock_attempt(const void *lockcnt, int expected, int new) "lockcnt %p unlock %d->%d"
@@ -3980,12 +4278,12 @@ lockcnt_futex_wait(const void *lockcnt, int val) "lockcnt %p waiting on %d"
 lockcnt_futex_wait_resume(const void *lockcnt, int new) "lockcnt %p after wait: %d"
 lockcnt_futex_wake(const void *lockcnt) "lockcnt %p waking up one waiter"
 
-# util/qemu-thread.c
+# qemu-thread-common.h
 qemu_mutex_lock(void *mutex, const char *file, const int line) "waiting on mutex %p (%s:%d)"
 qemu_mutex_locked(void *mutex, const char *file, const int line) "taken mutex %p (%s:%d)"
 qemu_mutex_unlock(void *mutex, const char *file, const int line) "released mutex %p (%s:%d)"
 
-# util/vfio-helpers.c
+# vfio-helpers.c
 qemu_vfio_dma_reset_temporary(void *s) "s %p"
 qemu_vfio_ram_block_added(void *s, void *p, size_t size) "s %p host %p size 0x%zx"
 qemu_vfio_ram_block_removed(void *s, void *p, size_t size) "s %p host %p size 0x%zx"
@@ -3993,5 +4291,4 @@ qemu_vfio_find_mapping(void *s, void *p) "s %p host %p"
 qemu_vfio_new_mapping(void *s, void *host, size_t size, int index, uint64_t iova) "s %p host %p size %zu index %d iova 0x%"PRIx64
 qemu_vfio_do_mapping(void *s, void *host, size_t size, uint64_t iova) "s %p host %p size %zu iova 0x%"PRIx64
 qemu_vfio_dma_map(void *s, void *host, size_t size, bool temporary, uint64_t *iova) "s %p host %p size %zu temporary %d iova %p"
-qemu_vfio_dma_map_invalid(void *s, void *mapping_host, size_t mapping_size, void *host, size_t size) "s %p mapping %p %zu requested %p %zu"
 qemu_vfio_dma_unmap(void *s, void *host) "s %p host %p"
